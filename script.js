@@ -446,7 +446,6 @@ function renderSections() {
 let currentPDF = null;
 let currentPage = 1;
 let totalPages = 0;
-let pdfScale = 1.0;
 
 // Open PDF
 async function openPDF(pdfName, category) {
@@ -469,7 +468,6 @@ async function openPDF(pdfName, category) {
     
     // Reset state
     currentPage = 1;
-    pdfScale = 1.0;
     
     // Set PDF title and category
     if (pdfTitle) pdfTitle.textContent = pdfName.replace('.pdf', '');
@@ -512,20 +510,11 @@ async function openPDF(pdfName, category) {
         currentPDF = await loadingTask.promise;
         totalPages = currentPDF.numPages;
         
-        // Update page info
-        document.getElementById('pageCount').textContent = totalPages;
-        document.getElementById('pageNum').textContent = currentPage;
-        
-        // Enable/disable navigation buttons
-        document.getElementById('prevPage').disabled = currentPage <= 1;
-        document.getElementById('nextPage').disabled = currentPage >= totalPages;
-        
-        // Render first page
-        await renderPage(currentPage);
+        // Render all pages
+        await renderAllPages();
         
         // Hide loading
         pdfLoading.style.display = 'none';
-        pdfCanvas.style.display = 'block';
         
         // Add to recent
         addToRecent(pdfName, category);
@@ -542,56 +531,49 @@ async function openPDF(pdfName, category) {
     }
 }
 
-// Render PDF page
-async function renderPage(pageNum) {
-    if (!currentPDF || pageNum < 1 || pageNum > totalPages) return;
+// Render all PDF pages
+async function renderAllPages() {
+    if (!currentPDF || totalPages === 0) return;
     
-    const pdfCanvas = document.getElementById('pdfCanvas');
     const canvasContainer = document.getElementById('pdfCanvasContainer');
+    const pdfCanvas = document.getElementById('pdfCanvas');
+    
+    // Clear container
+    canvasContainer.innerHTML = '';
+    
+    // Calculate scale to fit container width
+    const containerWidth = canvasContainer.clientWidth - 40; // Account for padding
+    const firstPage = await currentPDF.getPage(1);
+    const viewport = firstPage.getViewport({ scale: 1.0 });
+    const scale = Math.min(containerWidth / viewport.width, 2.0); // Max 2x zoom
     
     try {
-        const page = await currentPDF.getPage(pageNum);
-        const viewport = page.getViewport({ scale: pdfScale });
-        
-        // Set canvas size
-        pdfCanvas.height = viewport.height;
-        pdfCanvas.width = viewport.width;
-        
-        // Render page
-        const renderContext = {
-            canvasContext: pdfCanvas.getContext('2d'),
-            viewport: viewport
-        };
-        
-        await page.render(renderContext).promise;
-        
-        // Update page info
-        document.getElementById('pageNum').textContent = pageNum;
-        document.getElementById('zoomLevel').textContent = Math.round(pdfScale * 100) + '%';
-        
-        // Enable/disable navigation buttons
-        document.getElementById('prevPage').disabled = pageNum <= 1;
-        document.getElementById('nextPage').disabled = pageNum >= totalPages;
-        
-        currentPage = pageNum;
+        // Render all pages
+        for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+            const page = await currentPDF.getPage(pageNum);
+            const scaledViewport = page.getViewport({ scale: scale });
+            
+            // Create canvas for each page
+            const pageCanvas = document.createElement('canvas');
+            pageCanvas.className = 'pdf-page-canvas';
+            pageCanvas.height = scaledViewport.height;
+            pageCanvas.width = scaledViewport.width;
+            
+            // Render page
+            const renderContext = {
+                canvasContext: pageCanvas.getContext('2d'),
+                viewport: scaledViewport
+            };
+            
+            await page.render(renderContext).promise;
+            
+            // Add canvas to container
+            canvasContainer.appendChild(pageCanvas);
+        }
         
     } catch (error) {
-        console.error('Error rendering page:', error);
+        console.error('Error rendering pages:', error);
     }
-}
-
-// Change page
-function changePage(delta) {
-    const newPage = currentPage + delta;
-    if (newPage >= 1 && newPage <= totalPages) {
-        renderPage(newPage);
-    }
-}
-
-// Zoom PDF
-function zoomPDF(delta) {
-    pdfScale = Math.max(0.5, Math.min(3.0, pdfScale + delta));
-    renderPage(currentPage);
 }
 
 // Close PDF
@@ -606,7 +588,6 @@ function closePDF() {
     currentPDF = null;
     currentPage = 1;
     totalPages = 0;
-    pdfScale = 1.0;
     
     // Clear canvas
     const pdfCanvas = document.getElementById('pdfCanvas');
@@ -788,7 +769,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', (e) => {
         const modal = document.getElementById('pdfModal');
         if (modal && modal.classList.contains('active')) {
-            // Only handle keys when modal is active
+            // Only handle Escape key when modal is active
             if (e.key === 'Escape') {
                 if (document.fullscreenElement || document.webkitFullscreenElement || 
                     document.mozFullScreenElement || document.msFullscreenElement) {
@@ -796,35 +777,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     closePDF();
                 }
-            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-                // Previous page
-                e.preventDefault();
-                changePage(-1);
-            } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-                // Next page
-                e.preventDefault();
-                changePage(1);
-            } else if (e.key === 'Home') {
-                // First page
-                e.preventDefault();
-                renderPage(1);
-            } else if (e.key === 'End') {
-                // Last page
-                e.preventDefault();
-                renderPage(totalPages);
-            } else if (e.key === '+' || e.key === '=') {
-                // Zoom in
-                e.preventDefault();
-                zoomPDF(0.25);
-            } else if (e.key === '-') {
-                // Zoom out
-                e.preventDefault();
-                zoomPDF(-0.25);
-            } else if (e.key === '0') {
-                // Reset zoom
-                e.preventDefault();
-                pdfScale = 1.0;
-                renderPage(currentPage);
             }
         }
     });
