@@ -556,7 +556,9 @@ async function renderAllPages() {
     const dpr = window.devicePixelRatio || 1;
     
     // Calculate scale to fit container width (edge-to-edge)
-    const containerWidth = canvasContainer.clientWidth;
+    // Wait a bit for container to be properly sized
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const containerWidth = canvasContainer.clientWidth || window.innerWidth - 40;
     const firstPage = await currentPDF.getPage(1);
     const viewport = firstPage.getViewport({ scale: 1.0 });
     const scale = Math.min(containerWidth / viewport.width, 2.5); // Max 2.5x zoom for clarity
