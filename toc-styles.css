@@ -163,7 +163,7 @@
 }
 
 /* Adjust PDF container when TOC is open */
-.pdf-viewer-wrapper:has(.toc-sidebar.active) .pdf-viewer-container {
+.toc-sidebar.active ~ .pdf-viewer-container {
     margin-left: 320px;
     transition: margin-left 0.3s ease;
 }
@@ -174,7 +174,7 @@
         box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
     }
     
-    .pdf-viewer-wrapper:has(.toc-sidebar.active) .pdf-viewer-container {
+    .toc-sidebar.active ~ .pdf-viewer-container {
         margin-left: 280px;
     }
     
