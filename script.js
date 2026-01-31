@@ -446,6 +446,8 @@ function renderSections() {
 let currentPDF = null;
 let currentPage = 1;
 let totalPages = 0;
+let pdfOutline = null;
+let pageCanvases = [];
 
 // Open PDF
 async function openPDF(pdfName, category) {
@@ -510,6 +512,15 @@ async function openPDF(pdfName, category) {
         currentPDF = await loadingTask.promise;
         totalPages = currentPDF.numPages;
         
+        // Get PDF outline (table of contents)
+        try {
+            pdfOutline = await currentPDF.getOutline();
+            renderTOC(pdfOutline);
+        } catch (error) {
+            console.log('No table of contents available');
+            document.getElementById('tocContent').innerHTML = '<p class="toc-empty">No table of contents available for this PDF.</p>';
+        }
+        
         // Render all pages
         await renderAllPages();
         
@@ -536,16 +547,19 @@ async function renderAllPages() {
     if (!currentPDF || totalPages === 0) return;
     
     const canvasContainer = document.getElementById('pdfCanvasContainer');
-    const pdfCanvas = document.getElementById('pdfCanvas');
+    pageCanvases = [];
     
     // Clear container
     canvasContainer.innerHTML = '';
     
-    // Calculate scale to fit container width
-    const containerWidth = canvasContainer.clientWidth - 40; // Account for padding
+    // Get device pixel ratio for high-quality rendering
+    const dpr = window.devicePixelRatio || 1;
+    
+    // Calculate scale to fit container width (edge-to-edge)
+    const containerWidth = canvasContainer.clientWidth;
     const firstPage = await currentPDF.getPage(1);
     const viewport = firstPage.getViewport({ scale: 1.0 });
-    const scale = Math.min(containerWidth / viewport.width, 2.0); // Max 2x zoom
+    const scale = Math.min(containerWidth / viewport.width, 2.5); // Max 2.5x zoom for clarity
     
     try {
         // Render all pages
@@ -553,15 +567,24 @@ async function renderAllPages() {
             const page = await currentPDF.getPage(pageNum);
             const scaledViewport = page.getViewport({ scale: scale });
             
-            // Create canvas for each page
+            // Create canvas for each page with high DPR
             const pageCanvas = document.createElement('canvas');
             pageCanvas.className = 'pdf-page-canvas';
-            pageCanvas.height = scaledViewport.height;
-            pageCanvas.width = scaledViewport.width;
+            pageCanvas.setAttribute('data-page', pageNum);
+            pageCanvas.id = `pdf-page-${pageNum}`;
             
-            // Render page
+            // Set canvas size with DPR for crisp rendering
+            pageCanvas.width = scaledViewport.width * dpr;
+            pageCanvas.height = scaledViewport.height * dpr;
+            pageCanvas.style.width = scaledViewport.width + 'px';
+            pageCanvas.style.height = scaledViewport.height + 'px';
+            
+            const context = pageCanvas.getContext('2d');
+            context.scale(dpr, dpr);
+            
+            // Render page with high quality
             const renderContext = {
-                canvasContext: pageCanvas.getContext('2d'),
+                canvasContext: context,
                 viewport: scaledViewport
             };
             
@@ -569,11 +592,101 @@ async function renderAllPages() {
             
             // Add canvas to container
             canvasContainer.appendChild(pageCanvas);
+            pageCanvases.push(pageCanvas);
         }
         
     } catch (error) {
         console.error('Error rendering pages:', error);
     }
+}
+
+// Render Table of Contents
+function renderTOC(outline) {
+    const tocContent = document.getElementById('tocContent');
+    
+    if (!outline || outline.length === 0) {
+        tocContent.innerHTML = '<p class="toc-empty">No table of contents available for this PDF.</p>';
+        return;
+    }
+    
+    let tocHTML = '<ul class="toc-list">';
+    
+    function renderOutlineItem(item, level = 0) {
+        tocHTML += `<li class="toc-item toc-level-${level}">`;
+        tocHTML += `<a href="#" onclick="scrollToPage(${item.dest[0]}, event)" class="toc-link">`;
+        tocHTML += `<span class="toc-title">${item.title}</span>`;
+        if (item.dest && item.dest[0]) {
+            tocHTML += `<span class="toc-page">Page ${item.dest[0]}</span>`;
+        }
+        tocHTML += `</a>`;
+        
+        if (item.items && item.items.length > 0) {
+            tocHTML += '<ul class="toc-sublist">';
+            item.items.forEach(subItem => {
+                renderOutlineItem(subItem, level + 1);
+            });
+            tocHTML += '</ul>';
+        }
+        
+        tocHTML += '</li>';
+    }
+    
+    outline.forEach(item => {
+        renderOutlineItem(item);
+    });
+    
+    tocHTML += '</ul>';
+    tocContent.innerHTML = tocHTML;
+}
+
+// Scroll to specific page
+function scrollToPage(pageNum, event) {
+    if (event) event.preventDefault();
+    
+    const pageCanvas = document.getElementById(`pdf-page-${pageNum}`);
+    if (pageCanvas) {
+        pageCanvas.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Highlight the page briefly
+        pageCanvas.style.boxShadow = '0 0 20px rgba(102, 126, 234, 0.6)';
+        setTimeout(() => {
+            pageCanvas.style.boxShadow = '';
+        }, 2000);
+    }
+    
+    // Close TOC on mobile
+    if (window.innerWidth <= 768) {
+        toggleTOC();
+    }
+}
+
+// Toggle Table of Contents
+function toggleTOC() {
+    const tocSidebar = document.getElementById('tocSidebar');
+    const tocToggle = document.getElementById('tocToggle');
+    
+    if (tocSidebar) {
+        tocSidebar.classList.toggle('active');
+        if (tocSidebar.classList.contains('active')) {
+            tocToggle.classList.add('active');
+        } else {
+            tocToggle.classList.remove('active');
+        }
+    }
+}
+
+// Search in TOC
+function searchTOC() {
+    const searchTerm = document.getElementById('tocSearch').value.toLowerCase();
+    const tocItems = document.querySelectorAll('.toc-item');
+    
+    tocItems.forEach(item => {
+        const title = item.querySelector('.toc-title').textContent.toLowerCase();
+        if (title.includes(searchTerm) || searchTerm === '') {
+            item.style.display = '';
+        } else {
+            item.style.display = 'none';
+        }
+    });
 }
 
 // Close PDF
