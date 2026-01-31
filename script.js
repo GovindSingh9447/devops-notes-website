@@ -450,7 +450,14 @@ let pdfScale = 1.0;
 
 // Open PDF
 async function openPDF(pdfName, category) {
+    console.log('openPDF called:', pdfName, category);
+    
     const modal = document.getElementById('pdfModal');
+    if (!modal) {
+        console.error('PDF modal not found!');
+        return;
+    }
+    
     const pdfTitle = document.getElementById('pdfTitle');
     const pdfCategory = document.getElementById('pdfCategory');
     const pdfLoading = document.getElementById('pdfLoading');
@@ -465,25 +472,35 @@ async function openPDF(pdfName, category) {
     pdfScale = 1.0;
     
     // Set PDF title and category
-    pdfTitle.textContent = pdfName.replace('.pdf', '');
-    pdfCategory.textContent = category;
+    if (pdfTitle) pdfTitle.textContent = pdfName.replace('.pdf', '');
+    if (pdfCategory) pdfCategory.textContent = category;
     
     // Show modal
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
     
     // Show loading
-    pdfLoading.style.display = 'flex';
-    pdfCanvas.style.display = 'none';
+    if (pdfLoading) {
+        pdfLoading.style.display = 'flex';
+        pdfLoading.innerHTML = `
+            <div class="spinner"></div>
+            <p>Loading PDF...</p>
+        `;
+    }
+    if (pdfCanvas) pdfCanvas.style.display = 'none';
     
     // Get PDF URL from config (GitHub raw URL) or use local path
     const pdfUrl = typeof getPDFUrl !== 'undefined' ? getPDFUrl(pdfName) : encodeURIComponent(pdfName);
+    
+    console.log('PDF URL:', pdfUrl);
     
     try {
         // Check if PDF.js is available
         if (typeof pdfjsLib === 'undefined') {
             throw new Error('PDF.js library not loaded');
         }
+        
+        console.log('PDF.js loaded, starting to load PDF...');
         
         // Load PDF
         const loadingTask = pdfjsLib.getDocument({
