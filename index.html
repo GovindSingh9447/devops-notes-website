@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>DevOps Notes Library</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="toc-styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Source+Sans+Pro:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -147,13 +148,27 @@
                         <p class="toc-loading">Loading table of contents...</p>
                     </div>
                 </div>
-            <div class="pdf-viewer-container">
-                <div class="pdf-canvas-container" id="pdfCanvasContainer">
-                    <div class="pdf-loading" id="pdfLoading">
-                        <div class="spinner"></div>
-                        <p>Loading PDF...</p>
+            <div class="pdf-viewer-wrapper">
+                <div class="toc-sidebar" id="tocSidebar">
+                    <div class="toc-header">
+                        <h3>Table of Contents</h3>
+                        <button class="toc-close" onclick="toggleTOC()">×</button>
                     </div>
-                    <canvas id="pdfCanvas"></canvas>
+                    <div class="toc-search">
+                        <input type="text" id="tocSearch" placeholder="Search in PDF..." onkeyup="searchTOC()">
+                    </div>
+                    <div class="toc-content" id="tocContent">
+                        <p class="toc-loading">Loading table of contents...</p>
+                    </div>
+                </div>
+                <div class="pdf-viewer-container">
+                    <div class="pdf-canvas-container" id="pdfCanvasContainer">
+                        <div class="pdf-loading" id="pdfLoading">
+                            <div class="spinner"></div>
+                            <p>Loading PDF...</p>
+                        </div>
+                        <canvas id="pdfCanvas"></canvas>
+                    </div>
                 </div>
             </div>
         </div>

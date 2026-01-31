@@ -612,13 +612,20 @@ function renderTOC(outline) {
     let tocHTML = '<ul class="toc-list">';
     
     function renderOutlineItem(item, level = 0) {
+        const pageRef = item.dest ? (Array.isArray(item.dest) ? item.dest[0] : item.dest) : null;
+        const pageNum = pageRef ? (typeof pageRef === 'object' && pageRef.gen !== undefined ? pageRef.num : pageRef) : null;
+        
         tocHTML += `<li class="toc-item toc-level-${level}">`;
-        tocHTML += `<a href="#" onclick="scrollToPage(${item.dest[0]}, event)" class="toc-link">`;
-        tocHTML += `<span class="toc-title">${item.title}</span>`;
-        if (item.dest && item.dest[0]) {
-            tocHTML += `<span class="toc-page">Page ${item.dest[0]}</span>`;
+        if (pageNum) {
+            tocHTML += `<a href="#" onclick="scrollToPage(${pageNum}, event)" class="toc-link">`;
+        } else {
+            tocHTML += `<span class="toc-link">`;
         }
-        tocHTML += `</a>`;
+        tocHTML += `<span class="toc-title">${item.title}</span>`;
+        if (pageNum) {
+            tocHTML += `<span class="toc-page">Page ${pageNum}</span>`;
+        }
+        tocHTML += pageNum ? `</a>` : `</span>`;
         
         if (item.items && item.items.length > 0) {
             tocHTML += '<ul class="toc-sublist">';
