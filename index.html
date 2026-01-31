@@ -124,7 +124,35 @@
                 </div>
             </div>
             <div class="pdf-viewer-container">
-                <iframe id="pdfViewer" src="" frameborder="0"></iframe>
+                <div class="pdf-controls">
+                    <button class="pdf-nav-btn" id="prevPage" onclick="changePage(-1)" disabled>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                        Previous
+                    </button>
+                    <div class="page-info">
+                        <span id="pageNum">1</span> / <span id="pageCount">1</span>
+                    </div>
+                    <button class="pdf-nav-btn" id="nextPage" onclick="changePage(1)" disabled>
+                        Next
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </button>
+                    <div class="zoom-controls">
+                        <button class="zoom-btn" onclick="zoomPDF(-0.25)" title="Zoom Out">−</button>
+                        <span id="zoomLevel">100%</span>
+                        <button class="zoom-btn" onclick="zoomPDF(0.25)" title="Zoom In">+</button>
+                    </div>
+                </div>
+                <div class="pdf-canvas-container" id="pdfCanvasContainer">
+                    <div class="pdf-loading" id="pdfLoading">
+                        <div class="spinner"></div>
+                        <p>Loading PDF...</p>
+                    </div>
+                    <canvas id="pdfCanvas"></canvas>
+                </div>
             </div>
         </div>
     </div>

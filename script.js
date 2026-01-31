@@ -442,47 +442,159 @@ function renderSections() {
     }, 100);
 }
 
+// PDF viewer state
+let currentPDF = null;
+let currentPage = 1;
+let totalPages = 0;
+let pdfScale = 1.0;
+
 // Open PDF
-function openPDF(pdfName, category) {
+async function openPDF(pdfName, category) {
     const modal = document.getElementById('pdfModal');
-    const pdfViewer = document.getElementById('pdfViewer');
     const pdfTitle = document.getElementById('pdfTitle');
     const pdfCategory = document.getElementById('pdfCategory');
+    const pdfLoading = document.getElementById('pdfLoading');
+    const pdfCanvas = document.getElementById('pdfCanvas');
+    const canvasContainer = document.getElementById('pdfCanvasContainer');
     
     // Close mobile menu if open
     closeMobileMenu();
     
-    // Get PDF URL from config (GitHub raw URL) or use local path
-    const pdfUrl = typeof getPDFUrl !== 'undefined' ? getPDFUrl(pdfName) : encodeURIComponent(pdfName);
+    // Reset state
+    currentPage = 1;
+    pdfScale = 1.0;
     
     // Set PDF title and category
     pdfTitle.textContent = pdfName.replace('.pdf', '');
     pdfCategory.textContent = category;
     
-    // Set PDF source
-    pdfViewer.src = pdfUrl;
-    
-    // Add to recent
-    addToRecent(pdfName, category);
-    
     // Show modal
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
+    
+    // Show loading
+    pdfLoading.style.display = 'flex';
+    pdfCanvas.style.display = 'none';
+    
+    // Get PDF URL from config (GitHub raw URL) or use local path
+    const pdfUrl = typeof getPDFUrl !== 'undefined' ? getPDFUrl(pdfName) : encodeURIComponent(pdfName);
+    
+    try {
+        // Check if PDF.js is available
+        if (typeof pdfjsLib === 'undefined') {
+            throw new Error('PDF.js library not loaded');
+        }
+        
+        // Load PDF
+        const loadingTask = pdfjsLib.getDocument({
+            url: pdfUrl,
+            cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+            cMapPacked: true,
+        });
+        
+        currentPDF = await loadingTask.promise;
+        totalPages = currentPDF.numPages;
+        
+        // Update page info
+        document.getElementById('pageCount').textContent = totalPages;
+        document.getElementById('pageNum').textContent = currentPage;
+        
+        // Enable/disable navigation buttons
+        document.getElementById('prevPage').disabled = currentPage <= 1;
+        document.getElementById('nextPage').disabled = currentPage >= totalPages;
+        
+        // Render first page
+        await renderPage(currentPage);
+        
+        // Hide loading
+        pdfLoading.style.display = 'none';
+        pdfCanvas.style.display = 'block';
+        
+        // Add to recent
+        addToRecent(pdfName, category);
+        
+    } catch (error) {
+        console.error('Error loading PDF:', error);
+        pdfLoading.innerHTML = `
+            <div style="text-align: center; color: var(--text-secondary);">
+                <p style="font-size: 1.2em; margin-bottom: 0.5rem;">❌ Failed to load PDF</p>
+                <p style="font-size: 0.9em;">${error.message}</p>
+                <p style="font-size: 0.85em; margin-top: 1rem; opacity: 0.7;">The PDF may be too large or the URL is incorrect.</p>
+            </div>
+        `;
+    }
+}
+
+// Render PDF page
+async function renderPage(pageNum) {
+    if (!currentPDF || pageNum < 1 || pageNum > totalPages) return;
+    
+    const pdfCanvas = document.getElementById('pdfCanvas');
+    const canvasContainer = document.getElementById('pdfCanvasContainer');
+    
+    try {
+        const page = await currentPDF.getPage(pageNum);
+        const viewport = page.getViewport({ scale: pdfScale });
+        
+        // Set canvas size
+        pdfCanvas.height = viewport.height;
+        pdfCanvas.width = viewport.width;
+        
+        // Render page
+        const renderContext = {
+            canvasContext: pdfCanvas.getContext('2d'),
+            viewport: viewport
+        };
+        
+        await page.render(renderContext).promise;
+        
+        // Update page info
+        document.getElementById('pageNum').textContent = pageNum;
+        document.getElementById('zoomLevel').textContent = Math.round(pdfScale * 100) + '%';
+        
+        // Enable/disable navigation buttons
+        document.getElementById('prevPage').disabled = pageNum <= 1;
+        document.getElementById('nextPage').disabled = pageNum >= totalPages;
+        
+        currentPage = pageNum;
+        
+    } catch (error) {
+        console.error('Error rendering page:', error);
+    }
+}
+
+// Change page
+function changePage(delta) {
+    const newPage = currentPage + delta;
+    if (newPage >= 1 && newPage <= totalPages) {
+        renderPage(newPage);
+    }
+}
+
+// Zoom PDF
+function zoomPDF(delta) {
+    pdfScale = Math.max(0.5, Math.min(3.0, pdfScale + delta));
+    renderPage(currentPage);
 }
 
 // Close PDF
 function closePDF() {
     const modal = document.getElementById('pdfModal');
-    const pdfViewer = document.getElementById('pdfViewer');
     
     // Hide modal
     modal.classList.remove('active');
     document.body.style.overflow = 'auto';
     
-    // Clear PDF viewer after animation
-    setTimeout(() => {
-        pdfViewer.src = '';
-    }, 300);
+    // Clear PDF
+    currentPDF = null;
+    currentPage = 1;
+    totalPages = 0;
+    pdfScale = 1.0;
+    
+    // Clear canvas
+    const pdfCanvas = document.getElementById('pdfCanvas');
+    const ctx = pdfCanvas.getContext('2d');
+    ctx.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
 }
 
 // Toggle fullscreen
@@ -655,20 +767,50 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('mozfullscreenchange', updateFullscreenIcon);
         document.addEventListener('MSFullscreenChange', updateFullscreenIcon);
         
-        // Close modal on Escape
-        document.addEventListener('keydown', (e) => {
+    // Keyboard navigation for PDF viewer
+    document.addEventListener('keydown', (e) => {
+        const modal = document.getElementById('pdfModal');
+        if (modal && modal.classList.contains('active')) {
+            // Only handle keys when modal is active
             if (e.key === 'Escape') {
-                const modal = document.getElementById('pdfModal');
-                if (modal && modal.classList.contains('active')) {
-                    if (document.fullscreenElement || document.webkitFullscreenElement || 
-                        document.mozFullScreenElement || document.msFullscreenElement) {
-                        toggleFullscreen();
-                    } else {
-                        closePDF();
-                    }
+                if (document.fullscreenElement || document.webkitFullscreenElement || 
+                    document.mozFullScreenElement || document.msFullscreenElement) {
+                    toggleFullscreen();
+                } else {
+                    closePDF();
                 }
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                // Previous page
+                e.preventDefault();
+                changePage(-1);
+            } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                // Next page
+                e.preventDefault();
+                changePage(1);
+            } else if (e.key === 'Home') {
+                // First page
+                e.preventDefault();
+                renderPage(1);
+            } else if (e.key === 'End') {
+                // Last page
+                e.preventDefault();
+                renderPage(totalPages);
+            } else if (e.key === '+' || e.key === '=') {
+                // Zoom in
+                e.preventDefault();
+                zoomPDF(0.25);
+            } else if (e.key === '-') {
+                // Zoom out
+                e.preventDefault();
+                zoomPDF(-0.25);
+            } else if (e.key === '0') {
+                // Reset zoom
+                e.preventDefault();
+                pdfScale = 1.0;
+                renderPage(currentPage);
             }
-        });
+        }
+    });
     };
     
     // If PDF.js is already loaded, initialize immediately
