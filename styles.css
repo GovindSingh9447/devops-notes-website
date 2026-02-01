@@ -652,6 +652,35 @@ button, .pdf-card, .filter-btn, .recent-item, .action-btn {
 .modal-title-section {
     flex: 1;
     min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.back-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+    flex-shrink: 0;
+}
+
+.back-btn:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--accent);
+    transform: translateX(-2px);
+}
+
+.title-content {
+    flex: 1;
+    min-width: 0;
 }
 
 .modal-title {
