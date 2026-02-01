@@ -786,25 +786,30 @@ function toggleFullscreen() {
 // Handle header visibility on scroll
 let scrollTimeout = null;
 let lastScrollTop = 0;
+let isScrolling = false;
 
 function setupHeaderScrollBehavior() {
     const pdfCanvasContainer = document.getElementById('pdfCanvasContainer');
     const modalHeader = document.querySelector('.modal-header');
     const modalContent = document.querySelector('.modal-content');
     
-    if (!pdfCanvasContainer || !modalHeader) return;
+    if (!pdfCanvasContainer || !modalHeader || !modalContent) return;
+    
+    // Reset scroll tracking
+    lastScrollTop = 0;
+    isScrolling = false;
     
     pdfCanvasContainer.addEventListener('scroll', () => {
-        if (!modalContent) return;
-        
         const scrollTop = pdfCanvasContainer.scrollTop;
-        const isScrollingDown = scrollTop > lastScrollTop;
-        const scrollThreshold = 50;
+        const isScrollingDown = scrollTop > lastScrollTop && scrollTop > 100;
+        const scrollThreshold = 100;
         
         // Clear existing timeout
         if (scrollTimeout) {
             clearTimeout(scrollTimeout);
         }
+        
+        isScrolling = true;
         
         // Show header when scrolling up or at top
         if (scrollTop < scrollThreshold || !isScrollingDown) {
@@ -818,20 +823,30 @@ function setupHeaderScrollBehavior() {
         
         // Show header after scrolling stops
         scrollTimeout = setTimeout(() => {
+            isScrolling = false;
             modalHeader.classList.remove('hidden');
-        }, 1500);
+        }, 2000);
     });
     
-    // Show header on hover
+    // Show header on hover over modal
     modalContent.addEventListener('mouseenter', () => {
-        modalHeader.classList.remove('hidden');
+        if (!isScrolling) {
+            modalHeader.classList.remove('hidden');
+        }
     });
     
-    // Keep header visible when hovering over it
+    // Always show header when hovering over it
     modalHeader.addEventListener('mouseenter', () => {
         modalHeader.classList.remove('hidden');
         if (scrollTimeout) {
             clearTimeout(scrollTimeout);
+        }
+    });
+    
+    // Show header when mouse moves to top of modal
+    modalContent.addEventListener('mousemove', (e) => {
+        if (e.clientY < 100) {
+            modalHeader.classList.remove('hidden');
         }
     });
 }
