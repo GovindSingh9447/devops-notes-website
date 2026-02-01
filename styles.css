@@ -1299,6 +1299,91 @@ button, .pdf-card, .filter-btn, .recent-item, .action-btn {
     }
 }
 
+/* Content Notice */
+.content-notice {
+    margin-top: 4rem;
+    padding: 2rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    display: flex;
+    gap: 1.5rem;
+    box-shadow: var(--shadow-sm);
+    animation: fadeInUp 0.6s ease-out;
+}
+
+.notice-icon {
+    font-size: 2.5rem;
+    flex-shrink: 0;
+    opacity: 0.8;
+}
+
+.notice-content {
+    flex: 1;
+}
+
+.notice-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    color: var(--text-primary);
+    font-weight: 600;
+    margin-bottom: 1rem;
+}
+
+.notice-text {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    margin-bottom: 1rem;
+}
+
+.notice-text:last-of-type {
+    margin-bottom: 0;
+}
+
+.notice-small {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    font-style: italic;
+}
+
+.notice-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+    transition: var(--transition);
+    border-bottom: 1px solid transparent;
+}
+
+.notice-link:hover {
+    color: var(--text-primary);
+    border-bottom-color: var(--accent);
+}
+
+@media (max-width: 768px) {
+    .content-notice {
+        flex-direction: column;
+        padding: 1.5rem;
+        gap: 1rem;
+        margin-top: 3rem;
+    }
+    
+    .notice-icon {
+        font-size: 2rem;
+        text-align: center;
+    }
+    
+    .notice-title {
+        font-size: 1.25rem;
+        text-align: center;
+    }
+    
+    .notice-text {
+        font-size: 0.9rem;
+        text-align: center;
+    }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
     width: 8px;
