@@ -1402,3 +1402,105 @@ button, .pdf-card, .filter-btn, .recent-item, .action-btn {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--accent);
 }
+
+/* Footer */
+.site-footer {
+    margin-top: 4rem;
+    padding: 2rem 0;
+    border-top: 1px solid var(--border);
+    background: var(--bg-primary);
+}
+
+.footer-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+}
+
+.footer-section {
+    display: flex;
+    align-items: center;
+}
+
+.footer-text {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.developer-name {
+    color: var(--accent);
+    font-weight: 600;
+    font-family: 'Playfair Display', serif;
+}
+
+.social-links {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.social-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+.social-link:hover {
+    background: var(--accent);
+    color: var(--text-primary);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.social-link svg {
+    flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+    .site-footer {
+        margin-top: 3rem;
+        padding: 1.5rem 0;
+    }
+    
+    .footer-content {
+        flex-direction: column;
+        text-align: center;
+        padding: 0 1rem;
+        gap: 1rem;
+    }
+    
+    .social-links {
+        justify-content: center;
+        width: 100%;
+    }
+    
+    .social-link {
+        flex: 1;
+        justify-content: center;
+        padding: 0.625rem 1rem;
+    }
+    
+    .social-link span {
+        display: none; /* Hide text on mobile, show only icons */
+    }
+    
+    .social-link {
+        min-width: 44px; /* Ensure touch target size */
+    }
+}
