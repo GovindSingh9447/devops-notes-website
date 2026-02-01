@@ -979,13 +979,26 @@ button, .pdf-card, .filter-btn, .recent-item, .action-btn {
         align-items: center;
     }
     
+    .modal-title-section {
+        gap: 0.5rem;
+    }
+    
+    .back-btn {
+        width: 36px;
+        height: 36px;
+        display: flex;
+    }
+    
+    .back-btn svg {
+        width: 18px;
+        height: 18px;
+    }
+    
     .modal-title {
-        font-size: 1rem;
+        font-size: 0.95rem;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        flex: 1;
-        min-width: 0;
     }
     
     .modal-subtitle {
@@ -1007,6 +1020,14 @@ button, .pdf-card, .filter-btn, .recent-item, .action-btn {
     .action-btn svg {
         width: 14px;
         height: 14px;
+    }
+    
+    .action-btn span {
+        display: none;
+    }
+    
+    .action-btn svg {
+        margin: 0;
     }
     
     .pdf-canvas-container {
@@ -1146,8 +1167,18 @@ button, .pdf-card, .filter-btn, .recent-item, .action-btn {
         padding: 0.375rem 0.5rem;
     }
     
+    .back-btn {
+        width: 32px;
+        height: 32px;
+    }
+    
+    .back-btn svg {
+        width: 16px;
+        height: 16px;
+    }
+    
     .modal-title {
-        font-size: 0.9rem;
+        font-size: 0.85rem;
     }
     
     .modal-subtitle {
@@ -1157,13 +1188,17 @@ button, .pdf-card, .filter-btn, .recent-item, .action-btn {
     .action-btn {
         padding: 0.375rem 0.5rem;
         font-size: 0.7rem;
-        min-height: 36px;
+        min-height: 32px;
         gap: 0.25rem;
     }
     
     .action-btn svg {
         width: 12px;
         height: 12px;
+    }
+    
+    .action-btn span {
+        display: none;
     }
     
     .pdf-canvas-container {
