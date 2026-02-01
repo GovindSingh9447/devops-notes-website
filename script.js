@@ -532,6 +532,11 @@ async function openPDF(pdfName, category) {
         // Hide loading
         pdfLoading.style.display = 'none';
         
+        // Setup header scroll behavior
+        setTimeout(() => {
+            setupHeaderScrollBehavior();
+        }, 100);
+        
         // Add to recent
         addToRecent(pdfName, category);
         
@@ -776,6 +781,59 @@ function toggleFullscreen() {
             document.msExitFullscreen();
         }
     }
+}
+
+// Handle header visibility on scroll
+let scrollTimeout = null;
+let lastScrollTop = 0;
+
+function setupHeaderScrollBehavior() {
+    const pdfCanvasContainer = document.getElementById('pdfCanvasContainer');
+    const modalHeader = document.querySelector('.modal-header');
+    const modalContent = document.querySelector('.modal-content');
+    
+    if (!pdfCanvasContainer || !modalHeader) return;
+    
+    pdfCanvasContainer.addEventListener('scroll', () => {
+        if (!modalContent) return;
+        
+        const scrollTop = pdfCanvasContainer.scrollTop;
+        const isScrollingDown = scrollTop > lastScrollTop;
+        const scrollThreshold = 50;
+        
+        // Clear existing timeout
+        if (scrollTimeout) {
+            clearTimeout(scrollTimeout);
+        }
+        
+        // Show header when scrolling up or at top
+        if (scrollTop < scrollThreshold || !isScrollingDown) {
+            modalHeader.classList.remove('hidden');
+        } else if (scrollTop > scrollThreshold && isScrollingDown) {
+            // Hide header when scrolling down
+            modalHeader.classList.add('hidden');
+        }
+        
+        lastScrollTop = scrollTop;
+        
+        // Show header after scrolling stops
+        scrollTimeout = setTimeout(() => {
+            modalHeader.classList.remove('hidden');
+        }, 1500);
+    });
+    
+    // Show header on hover
+    modalContent.addEventListener('mouseenter', () => {
+        modalHeader.classList.remove('hidden');
+    });
+    
+    // Keep header visible when hovering over it
+    modalHeader.addEventListener('mouseenter', () => {
+        modalHeader.classList.remove('hidden');
+        if (scrollTimeout) {
+            clearTimeout(scrollTimeout);
+        }
+    });
 }
 
 // Update fullscreen icon
