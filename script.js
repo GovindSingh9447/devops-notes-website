@@ -479,6 +479,11 @@ async function openPDF(pdfName, category) {
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
     
+    // Push state to history for back button support
+    if (window.history && window.history.pushState) {
+        window.history.pushState({ pdfView: true }, '', '#pdf');
+    }
+    
     // Show loading
     if (pdfLoading) {
         pdfLoading.style.display = 'flex';
@@ -702,19 +707,47 @@ function searchTOC() {
 function closePDF() {
     const modal = document.getElementById('pdfModal');
     
+    // Exit fullscreen if active
+    if (document.fullscreenElement || document.webkitFullscreenElement || 
+        document.mozFullScreenElement || document.msFullscreenElement) {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+        } else if (document.mozCancelFullScreen) {
+            document.mozCancelFullScreen();
+        } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+        }
+    }
+    
+    // Close TOC if open
+    const tocSidebar = document.getElementById('tocSidebar');
+    if (tocSidebar && tocSidebar.classList.contains('active')) {
+        tocSidebar.classList.remove('active');
+    }
+    
     // Hide modal
     modal.classList.remove('active');
     document.body.style.overflow = 'auto';
+    
+    // Remove hash from URL if present
+    if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname);
+    }
     
     // Clear PDF
     currentPDF = null;
     currentPage = 1;
     totalPages = 0;
+    pdfOutline = null;
+    pageCanvases = [];
     
-    // Clear canvas
-    const pdfCanvas = document.getElementById('pdfCanvas');
-    const ctx = pdfCanvas.getContext('2d');
-    ctx.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
+    // Clear canvas container
+    const canvasContainer = document.getElementById('pdfCanvasContainer');
+    if (canvasContainer) {
+        canvasContainer.innerHTML = '';
+    }
 }
 
 // Toggle fullscreen
@@ -887,6 +920,14 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('mozfullscreenchange', updateFullscreenIcon);
         document.addEventListener('MSFullscreenChange', updateFullscreenIcon);
         
+    // Handle browser back button
+    window.addEventListener('popstate', (e) => {
+        const modal = document.getElementById('pdfModal');
+        if (modal && modal.classList.contains('active')) {
+            closePDF();
+        }
+    });
+    
     // Keyboard navigation for PDF viewer
     document.addEventListener('keydown', (e) => {
         const modal = document.getElementById('pdfModal');
@@ -898,6 +939,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     toggleFullscreen();
                 } else {
                     closePDF();
+                    // Remove hash from URL
+                    if (window.history && window.history.replaceState) {
+                        window.history.replaceState(null, '', window.location.pathname);
+                    }
                 }
             }
         }

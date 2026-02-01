@@ -105,8 +105,15 @@
         <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title-section">
-                    <h2 id="pdfTitle" class="modal-title"></h2>
-                    <span class="modal-subtitle" id="pdfCategory"></span>
+                    <button class="back-btn" onclick="closePDF()" title="Back to Home">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                    </button>
+                    <div class="title-content">
+                        <h2 id="pdfTitle" class="modal-title"></h2>
+                        <span class="modal-subtitle" id="pdfCategory"></span>
+                    </div>
                 </div>
                 <div class="modal-actions">
                     <button class="action-btn toc-btn" id="tocToggle" onclick="toggleTOC()" title="Table of Contents">
