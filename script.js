@@ -520,10 +520,17 @@ async function openPDF(pdfName, category) {
         // Get PDF outline (table of contents)
         try {
             pdfOutline = await currentPDF.getOutline();
-            renderTOC(pdfOutline);
+            console.log('PDF Outline:', pdfOutline);
+            if (pdfOutline && pdfOutline.length > 0) {
+                renderTOC(pdfOutline);
+            } else {
+                // Create a simple page-based TOC if no outline exists
+                createPageBasedTOC();
+            }
         } catch (error) {
-            console.log('No table of contents available');
-            document.getElementById('tocContent').innerHTML = '<p class="toc-empty">No table of contents available for this PDF.</p>';
+            console.log('No table of contents available:', error);
+            // Create a simple page-based TOC as fallback
+            createPageBasedTOC();
         }
         
         // Render all pages
@@ -617,15 +624,49 @@ function renderTOC(outline) {
     const tocContent = document.getElementById('tocContent');
     
     if (!outline || outline.length === 0) {
-        tocContent.innerHTML = '<p class="toc-empty">No table of contents available for this PDF.</p>';
+        createPageBasedTOC();
         return;
     }
     
     let tocHTML = '<ul class="toc-list">';
     
     function renderOutlineItem(item, level = 0) {
-        const pageRef = item.dest ? (Array.isArray(item.dest) ? item.dest[0] : item.dest) : null;
-        const pageNum = pageRef ? (typeof pageRef === 'object' && pageRef.gen !== undefined ? pageRef.num : pageRef) : null;
+        let pageNum = null;
+        
+        // Try different methods to extract page number
+        if (item.dest) {
+            if (Array.isArray(item.dest)) {
+                // Handle array destination
+                const dest = item.dest[0];
+                if (typeof dest === 'object' && dest !== null) {
+                    if (dest.gen !== undefined && dest.num !== undefined) {
+                        pageNum = dest.num;
+                    } else if (dest.pageIndex !== undefined) {
+                        pageNum = dest.pageIndex + 1;
+                    } else if (dest.pageNum !== undefined) {
+                        pageNum = dest.pageNum;
+                    }
+                } else if (typeof dest === 'number') {
+                    pageNum = dest;
+                }
+            } else if (typeof item.dest === 'object' && item.dest !== null) {
+                if (item.dest.gen !== undefined && item.dest.num !== undefined) {
+                    pageNum = item.dest.num;
+                } else if (item.dest.pageIndex !== undefined) {
+                    pageNum = item.dest.pageIndex + 1;
+                }
+            } else if (typeof item.dest === 'number') {
+                pageNum = item.dest;
+            }
+        }
+        
+        // Try to get page from URL if available
+        if (!pageNum && item.url) {
+            const match = item.url.match(/page=(\d+)/);
+            if (match) {
+                pageNum = parseInt(match[1]);
+            }
+        }
         
         tocHTML += `<li class="toc-item toc-level-${level}">`;
         if (pageNum) {
@@ -633,7 +674,7 @@ function renderTOC(outline) {
         } else {
             tocHTML += `<span class="toc-link">`;
         }
-        tocHTML += `<span class="toc-title">${item.title}</span>`;
+        tocHTML += `<span class="toc-title">${item.title || 'Untitled'}</span>`;
         if (pageNum) {
             tocHTML += `<span class="toc-page">Page ${pageNum}</span>`;
         }
@@ -653,6 +694,36 @@ function renderTOC(outline) {
     outline.forEach(item => {
         renderOutlineItem(item);
     });
+    
+    tocHTML += '</ul>';
+    tocContent.innerHTML = tocHTML;
+}
+
+// Create a simple page-based TOC when PDF has no outline
+function createPageBasedTOC() {
+    const tocContent = document.getElementById('tocContent');
+    
+    if (!totalPages || totalPages === 0) {
+        tocContent.innerHTML = '<p class="toc-empty">No table of contents available for this PDF.</p>';
+        return;
+    }
+    
+    let tocHTML = '<ul class="toc-list">';
+    
+    // Create TOC entries for every 10 pages or major sections
+    const pagesPerEntry = totalPages > 100 ? 20 : totalPages > 50 ? 10 : 5;
+    
+    for (let i = 1; i <= totalPages; i += pagesPerEntry) {
+        const endPage = Math.min(i + pagesPerEntry - 1, totalPages);
+        const label = i === endPage ? `Page ${i}` : `Pages ${i}-${endPage}`;
+        
+        tocHTML += `<li class="toc-item toc-level-0">`;
+        tocHTML += `<a href="#" onclick="scrollToPage(${i}, event)" class="toc-link">`;
+        tocHTML += `<span class="toc-title">${label}</span>`;
+        tocHTML += `<span class="toc-page">Page ${i}</span>`;
+        tocHTML += `</a>`;
+        tocHTML += `</li>`;
+    }
     
     tocHTML += '</ul>';
     tocContent.innerHTML = tocHTML;
