@@ -42,6 +42,13 @@
                 </div>
 
                 <div class="nav-section">
+                    <h3 class="nav-title">Favorites</h3>
+                    <div class="favorites-list" id="favoritesList">
+                        <p class="empty-state">Star a note to save it here</p>
+                    </div>
+                </div>
+
+                <div class="nav-section">
                     <h3 class="nav-title">Continue reading</h3>
                     <div class="recent-pdfs" id="recentPDFs">
                         <p class="empty-state">Open a note to see it here</p>
@@ -194,10 +201,25 @@
                         <span class="modal-subtitle" id="pdfCategory"></span>
                     </div>
                 </div>
-                <div class="page-indicator" id="pageIndicator" aria-live="polite" title="Current page">
-                    <span id="currentPageNum">1</span><span class="page-sep">/</span><span id="totalPageNum">1</span>
+                <div class="page-jump" id="pageJump" title="Go to page">
+                    <label class="page-jump-label" for="pageJumpInput">Page</label>
+                    <input type="number" id="pageJumpInput" class="page-jump-input" min="1" value="1" inputmode="numeric" aria-label="Jump to page">
+                    <span class="page-sep">/</span>
+                    <span id="totalPageNum">1</span>
+                </div>
+                <div class="zoom-controls" id="zoomControls" role="group" aria-label="Zoom">
+                    <button type="button" class="zoom-btn" id="zoomOutBtn" title="Zoom out" aria-label="Zoom out">−</button>
+                    <button type="button" class="zoom-fit-btn" id="zoomFitBtn" title="Fit width">Fit</button>
+                    <span class="zoom-level" id="zoomLevelLabel">100%</span>
+                    <button type="button" class="zoom-btn" id="zoomInBtn" title="Zoom in" aria-label="Zoom in">+</button>
                 </div>
                 <div class="modal-actions">
+                    <button class="action-btn bookmark-btn" id="viewerBookmarkBtn" onclick="toggleCurrentBookmark()" title="Toggle favorite">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                        </svg>
+                        <span id="bookmarkBtnText">Favorite</span>
+                    </button>
                     <button class="action-btn toc-btn" id="tocToggle" onclick="toggleTOC()" title="Table of contents">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="8" y1="6" x2="21" y2="6"></line>

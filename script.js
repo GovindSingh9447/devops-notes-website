@@ -102,8 +102,13 @@ const pdfCategories = {
 // Cache management
 const CACHE_KEY = 'pdfLibraryCache';
 const RECENT_KEY = 'recentPDFs';
+const BOOKMARKS_KEY = 'pdfBookmarks';
+const PROGRESS_KEY = 'pdfReadingProgress';
 const MAX_RECENT = 10;
 const MAX_CACHE_SIZE = 50; // Maximum number of thumbnails to cache
+const ZOOM_STEP = 0.15;
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 2.5;
 
 let thumbnailCache = {};
 let totalPDFCount = 0;
@@ -171,6 +176,133 @@ function addToRecent(pdfName, category) {
     } catch (e) {
         console.warn('Failed to save recent PDFs:', e);
     }
+}
+
+// ——— Bookmarks ———
+function getBookmarks() {
+    try {
+        const raw = localStorage.getItem(BOOKMARKS_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function saveBookmarks(list) {
+    localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(list));
+}
+
+function isBookmarked(pdfName) {
+    return getBookmarks().some(item => item.name === pdfName);
+}
+
+function toggleBookmark(pdfName, category, event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+
+    let list = getBookmarks();
+    if (list.some(item => item.name === pdfName)) {
+        list = list.filter(item => item.name !== pdfName);
+    } else {
+        list.unshift({ name: pdfName, category: category || 'Other Resources', timestamp: Date.now() });
+    }
+    saveBookmarks(list);
+    renderFavorites();
+    renderCategoryFilters();
+    updateViewerBookmarkBtn();
+    // Refresh cards so star state stays in sync
+    if (currentFilter === 'favorites') {
+        renderSections();
+    } else {
+        document.querySelectorAll('.pdf-card').forEach(card => {
+            if (card.getAttribute('data-pdf') !== pdfName) return;
+            const btn = card.querySelector('.card-bookmark');
+            if (!btn) return;
+            const active = isBookmarked(pdfName);
+            btn.classList.toggle('active', active);
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+            const svg = btn.querySelector('svg');
+            if (svg) svg.setAttribute('fill', active ? 'currentColor' : 'none');
+        });
+    }
+}
+
+function toggleCurrentBookmark() {
+    if (!currentPdfName) return;
+    toggleBookmark(currentPdfName, currentPdfCategory);
+}
+
+function updateViewerBookmarkBtn() {
+    const btn = document.getElementById('viewerBookmarkBtn');
+    const label = document.getElementById('bookmarkBtnText');
+    if (!btn || !currentPdfName) return;
+    const active = isBookmarked(currentPdfName);
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    if (label) label.textContent = active ? 'Saved' : 'Favorite';
+}
+
+function renderFavorites() {
+    const container = document.getElementById('favoritesList');
+    if (!container) return;
+
+    const bookmarks = getBookmarks();
+    if (bookmarks.length === 0) {
+        container.innerHTML = '<p class="empty-state">Star a note to save it here</p>';
+        return;
+    }
+
+    container.innerHTML = '';
+    bookmarks.slice(0, 12).forEach(item => {
+        const el = document.createElement('div');
+        el.className = 'recent-item favorite-item';
+        el.onclick = () => openPDF(item.name, item.category);
+
+        const thumb = thumbnailCache[item.name]?.dataUrl;
+        const thumbHtml = thumb
+            ? `<img src="${thumb}" alt="" class="recent-thumb">`
+            : `<div class="recent-thumb pdf-thumbnail-placeholder" aria-hidden="true"></div>`;
+
+        el.innerHTML = `
+            ${thumbHtml}
+            <div class="recent-info">
+                <div class="recent-name">${item.name.replace('.pdf', '')}</div>
+                <div class="recent-time">${item.category}</div>
+            </div>
+            <button type="button" class="sidebar-star active" title="Remove favorite" aria-label="Remove favorite">★</button>
+        `;
+
+        el.querySelector('.sidebar-star').onclick = (e) => toggleBookmark(item.name, item.category, e);
+        container.appendChild(el);
+    });
+}
+
+// ——— Reading progress ———
+function getReadingProgress() {
+    try {
+        const raw = localStorage.getItem(PROGRESS_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+function saveReadingProgress(pdfName, page) {
+    if (!pdfName || !page) return;
+    try {
+        const data = getReadingProgress();
+        data[pdfName] = { page: page, timestamp: Date.now() };
+        localStorage.setItem(PROGRESS_KEY, JSON.stringify(data));
+    } catch (e) {
+        console.warn('Failed to save reading progress:', e);
+    }
+}
+
+function getSavedPage(pdfName) {
+    const entry = getReadingProgress()[pdfName];
+    return entry && entry.page > 0 ? entry.page : 1;
 }
 
 // Generate PDF thumbnail
@@ -285,6 +417,7 @@ function renderCategoryFilters() {
     filtersContainer.innerHTML = '';
 
     const libraryTotal = Object.values(pdfCategories).reduce((sum, list) => sum + list.length, 0);
+    const favCount = getBookmarks().length;
 
     const allBtn = document.createElement('button');
     allBtn.className = `filter-btn ${currentFilter === 'all' ? 'active' : ''}`;
@@ -296,6 +429,17 @@ function renderCategoryFilters() {
     `;
     allBtn.onclick = () => setFilter('all');
     filtersContainer.appendChild(allBtn);
+
+    const favBtn = document.createElement('button');
+    favBtn.className = `filter-btn ${currentFilter === 'favorites' ? 'active' : ''}`;
+    favBtn.setAttribute('role', 'option');
+    favBtn.setAttribute('aria-selected', currentFilter === 'favorites' ? 'true' : 'false');
+    favBtn.innerHTML = `
+        <span>Favorites</span>
+        <span class="filter-count">${favCount}</span>
+    `;
+    favBtn.onclick = () => setFilter('favorites');
+    filtersContainer.appendChild(favBtn);
 
     Object.keys(pdfCategories).forEach(category => {
         const count = pdfCategories[category].length;
@@ -324,7 +468,9 @@ function setFilter(category) {
 function updateActiveFilterLabel() {
     const label = document.getElementById('activeFilterLabel');
     if (!label) return;
-    label.textContent = currentFilter === 'all' ? 'All categories' : currentFilter;
+    if (currentFilter === 'all') label.textContent = 'All categories';
+    else if (currentFilter === 'favorites') label.textContent = 'Favorites';
+    else label.textContent = currentFilter;
 }
 
 function setViewMode(mode) {
@@ -417,23 +563,43 @@ function renderSections() {
     sectionsContainer.setAttribute('data-view', currentView);
     totalPDFCount = 0;
 
-    const categories = currentFilter === 'all'
-        ? Object.keys(pdfCategories)
-        : [currentFilter];
-
     const searchTerm = (document.getElementById('searchInput')?.value || '').toLowerCase();
     let cardIndex = 0;
 
-    categories.forEach((category, sectionIndex) => {
-        const pdfs = pdfCategories[category];
-        if (pdfs.length === 0) return;
+    let categories;
+    if (currentFilter === 'favorites') {
+        categories = ['Favorites'];
+    } else if (currentFilter === 'all') {
+        categories = Object.keys(pdfCategories);
+    } else {
+        categories = [currentFilter];
+    }
 
-        const filteredPDFs = searchTerm
-            ? pdfs.filter(pdf =>
-                pdf.toLowerCase().includes(searchTerm) ||
-                category.toLowerCase().includes(searchTerm)
-              )
-            : pdfs;
+    categories.forEach((category, sectionIndex) => {
+        let filteredPDFs;
+        let displayCategory = category;
+
+        if (currentFilter === 'favorites') {
+            const bookmarks = getBookmarks();
+            filteredPDFs = bookmarks
+                .filter(item =>
+                    !searchTerm ||
+                    item.name.toLowerCase().includes(searchTerm) ||
+                    (item.category || '').toLowerCase().includes(searchTerm)
+                )
+                .map(item => ({ name: item.name, category: item.category }));
+            displayCategory = 'Favorites';
+        } else {
+            const pdfs = pdfCategories[category] || [];
+            if (pdfs.length === 0) return;
+            filteredPDFs = (searchTerm
+                ? pdfs.filter(pdf =>
+                    pdf.toLowerCase().includes(searchTerm) ||
+                    category.toLowerCase().includes(searchTerm)
+                  )
+                : pdfs
+            ).map(name => ({ name, category }));
+        }
 
         if (filteredPDFs.length === 0) return;
 
@@ -449,7 +615,7 @@ function renderSections() {
         const sectionTitle = document.createElement('h2');
         sectionTitle.className = 'section-title';
         sectionTitle.innerHTML = `
-            ${category}
+            ${displayCategory}
             <span class="section-count">${filteredPDFs.length}</span>
         `;
 
@@ -458,7 +624,12 @@ function renderSections() {
         const pdfGrid = document.createElement('div');
         pdfGrid.className = 'pdf-grid';
 
-        filteredPDFs.forEach(pdfName => {
+        filteredPDFs.forEach(item => {
+            const pdfName = item.name;
+            const itemCategory = item.category;
+            const bookmarked = isBookmarked(pdfName);
+            const savedPage = getSavedPage(pdfName);
+
             const pdfCard = document.createElement('article');
             pdfCard.className = 'pdf-card';
             pdfCard.setAttribute('data-pdf', pdfName);
@@ -467,24 +638,35 @@ function renderSections() {
             pdfCard.setAttribute('aria-label', `Open ${pdfName.replace('.pdf', '')}`);
             pdfCard.style.animationDelay = `${Math.min(cardIndex, 20) * 25}ms`;
             cardIndex += 1;
-            pdfCard.onclick = () => openPDF(pdfName, category);
+            pdfCard.onclick = () => openPDF(pdfName, itemCategory);
             pdfCard.onkeydown = (e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    openPDF(pdfName, category);
+                    openPDF(pdfName, itemCategory);
                 }
             };
 
+            const progressHint = savedPage > 1
+                ? `<div class="pdf-progress">Resume p.${savedPage}</div>`
+                : '';
+
             pdfCard.innerHTML = `
+                <button type="button" class="card-bookmark ${bookmarked ? 'active' : ''}" aria-label="Toggle favorite" aria-pressed="${bookmarked}" title="Favorite">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="${bookmarked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                </button>
                 <div class="pdf-thumbnail">
                     ${PLACEHOLDER_SVG}
                 </div>
                 <div class="pdf-info">
                     <div class="pdf-name">${pdfName.replace('.pdf', '')}</div>
-                    <div class="pdf-category">${category}</div>
+                    <div class="pdf-category">${itemCategory}</div>
+                    ${progressHint}
                 </div>
             `;
 
+            pdfCard.querySelector('.card-bookmark').onclick = (e) => toggleBookmark(pdfName, itemCategory, e);
             pdfGrid.appendChild(pdfCard);
         });
 
@@ -506,36 +688,98 @@ function renderSections() {
 
 // PDF viewer state
 let currentPDF = null;
+let currentPdfName = null;
+let currentPdfCategory = null;
 let currentPage = 1;
 let totalPages = 0;
 let pdfOutline = null;
 let pageCanvases = [];
 let pageTrackRaf = null;
 let pageTrackBound = false;
+let fitScale = 1;
+let zoomFactor = 1;
+let isRenderingPages = false;
+let progressSaveTimer = null;
+let restorePageAfterRender = 1;
+
+function updateZoomLabel() {
+    const label = document.getElementById('zoomLevelLabel');
+    if (label) label.textContent = `${Math.round(zoomFactor * 100)}%`;
+
+    const zoomOut = document.getElementById('zoomOutBtn');
+    const zoomIn = document.getElementById('zoomInBtn');
+    if (zoomOut) zoomOut.disabled = zoomFactor <= ZOOM_MIN + 0.001;
+    if (zoomIn) zoomIn.disabled = zoomFactor >= ZOOM_MAX - 0.001;
+}
+
+function setZoomControlsVisible(show) {
+    const jump = document.getElementById('pageJump');
+    const zoom = document.getElementById('zoomControls');
+    if (jump) jump.classList.toggle('visible', show);
+    if (zoom) zoom.classList.toggle('visible', show);
+}
 
 function updatePageIndicator(page) {
     if (page && page >= 1) {
         currentPage = Math.min(page, totalPages || page);
     }
 
-    const currentEl = document.getElementById('currentPageNum');
+    const jumpInput = document.getElementById('pageJumpInput');
     const totalEl = document.getElementById('totalPageNum');
     const floatCurrent = document.getElementById('floatCurrentPage');
     const floatTotal = document.getElementById('floatTotalPage');
-    const headerIndicator = document.getElementById('pageIndicator');
     const floatIndicator = document.getElementById('pageIndicatorFloat');
 
     const cur = String(currentPage || 1);
     const tot = String(totalPages || 1);
 
-    if (currentEl) currentEl.textContent = cur;
+    if (jumpInput && document.activeElement !== jumpInput) {
+        jumpInput.value = cur;
+        jumpInput.max = String(totalPages || 1);
+    }
     if (totalEl) totalEl.textContent = tot;
     if (floatCurrent) floatCurrent.textContent = cur;
     if (floatTotal) floatTotal.textContent = tot;
 
     const show = totalPages > 0;
-    if (headerIndicator) headerIndicator.classList.toggle('visible', show);
     if (floatIndicator) floatIndicator.classList.toggle('visible', show);
+    setZoomControlsVisible(show);
+
+    if (currentPdfName && currentPage > 0) {
+        if (progressSaveTimer) clearTimeout(progressSaveTimer);
+        progressSaveTimer = setTimeout(() => {
+            saveReadingProgress(currentPdfName, currentPage);
+        }, 400);
+    }
+}
+
+function jumpToPageFromInput() {
+    const input = document.getElementById('pageJumpInput');
+    if (!input || !totalPages) return;
+    let page = parseInt(input.value, 10);
+    if (Number.isNaN(page)) page = 1;
+    page = Math.max(1, Math.min(totalPages, page));
+    input.value = String(page);
+    scrollToPage(page);
+}
+
+async function changeZoom(delta) {
+    const next = Math.round((zoomFactor + delta) * 100) / 100;
+    const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
+    if (Math.abs(clamped - zoomFactor) < 0.001) return;
+    zoomFactor = clamped;
+    updateZoomLabel();
+    restorePageAfterRender = currentPage || 1;
+    await renderAllPages();
+    setTimeout(() => scrollToPage(restorePageAfterRender), 60);
+}
+
+async function fitZoomWidth() {
+    zoomFactor = 1;
+    updateZoomLabel();
+    restorePageAfterRender = currentPage || 1;
+    await renderAllPages();
+    setTimeout(() => scrollToPage(restorePageAfterRender), 60);
 }
 
 function getVisiblePageNumber() {
@@ -587,17 +831,15 @@ function setupPageTracking() {
         pageTrackBound = true;
     }
 
-    updatePageIndicator(1);
-    // Sync once layout settles
+    // Don't force page 1 — keep restored / current page
     setTimeout(() => updatePageIndicator(getVisiblePageNumber()), 50);
 }
 
 function teardownPageTracking() {
     updatePageIndicator(1);
-    const headerIndicator = document.getElementById('pageIndicator');
     const floatIndicator = document.getElementById('pageIndicatorFloat');
-    if (headerIndicator) headerIndicator.classList.remove('visible');
     if (floatIndicator) floatIndicator.classList.remove('visible');
+    setZoomControlsVisible(false);
 }
 
 // Open PDF
@@ -614,28 +856,26 @@ async function openPDF(pdfName, category) {
     const pdfCategory = document.getElementById('pdfCategory');
     const pdfLoading = document.getElementById('pdfLoading');
     const pdfCanvas = document.getElementById('pdfCanvas');
-    const canvasContainer = document.getElementById('pdfCanvasContainer');
     
-    // Close mobile menu if open
     closeMobileMenu();
     
-    // Reset state
+    currentPdfName = pdfName;
+    currentPdfCategory = category;
     currentPage = 1;
+    zoomFactor = 1;
+    updateZoomLabel();
+    updateViewerBookmarkBtn();
     
-    // Set PDF title and category
     if (pdfTitle) pdfTitle.textContent = pdfName.replace('.pdf', '');
     if (pdfCategory) pdfCategory.textContent = category;
     
-    // Show modal
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
     
-    // Push state to history for back button support
     if (window.history && window.history.pushState) {
         window.history.pushState({ pdfView: true }, '', '#pdf');
     }
     
-    // Show loading
     if (pdfLoading) {
         pdfLoading.style.display = 'flex';
         pdfLoading.innerHTML = `
@@ -645,20 +885,13 @@ async function openPDF(pdfName, category) {
     }
     if (pdfCanvas) pdfCanvas.style.display = 'none';
     
-    // Get PDF URL from config (GitHub raw URL) or use local path
     const pdfUrl = typeof getPDFUrl !== 'undefined' ? getPDFUrl(pdfName) : encodeURIComponent(pdfName);
     
-    console.log('PDF URL:', pdfUrl);
-    
     try {
-        // Check if PDF.js is available
         if (typeof pdfjsLib === 'undefined') {
             throw new Error('PDF.js library not loaded');
         }
         
-        console.log('PDF.js loaded, starting to load PDF...');
-        
-        // Load PDF
         const loadingTask = pdfjsLib.getDocument({
             url: pdfUrl,
             cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
@@ -667,85 +900,92 @@ async function openPDF(pdfName, category) {
         
         currentPDF = await loadingTask.promise;
         totalPages = currentPDF.numPages;
-        updatePageIndicator(1);
+
+        const savedPage = Math.min(getSavedPage(pdfName), totalPages);
+        restorePageAfterRender = savedPage;
+        updatePageIndicator(savedPage);
         
-        // Get PDF outline (table of contents)
         try {
             pdfOutline = await currentPDF.getOutline();
-            console.log('PDF Outline:', pdfOutline);
             if (pdfOutline && pdfOutline.length > 0) {
                 renderTOC(pdfOutline);
             } else {
-                // Create a simple page-based TOC if no outline exists
                 createPageBasedTOC();
             }
         } catch (error) {
-            console.log('No table of contents available:', error);
-            // Create a simple page-based TOC as fallback
             createPageBasedTOC();
         }
         
-        // Render all pages
         await renderAllPages();
         
-        // Hide loading
-        pdfLoading.style.display = 'none';
+        const loadingAfter = document.getElementById('pdfLoading');
+        if (loadingAfter) loadingAfter.style.display = 'none';
         
-        // Track visible page + header scroll behavior
         setTimeout(() => {
             setupPageTracking();
             setupHeaderScrollBehavior();
-        }, 100);
+            if (restorePageAfterRender > 1) {
+                scrollToPage(restorePageAfterRender);
+            }
+            updatePageIndicator(restorePageAfterRender);
+        }, 120);
         
-        // Add to recent
         addToRecent(pdfName, category);
         
     } catch (error) {
         console.error('Error loading PDF:', error);
-        pdfLoading.innerHTML = `
-            <div style="text-align: center; color: var(--text-secondary);">
-                <p style="font-size: 1.2em; margin-bottom: 0.5rem;">❌ Failed to load PDF</p>
-                <p style="font-size: 0.9em;">${error.message}</p>
-                <p style="font-size: 0.85em; margin-top: 1rem; opacity: 0.7;">The PDF may be too large or the URL is incorrect.</p>
-            </div>
-        `;
+        const loadingEl = document.getElementById('pdfLoading');
+        if (loadingEl) {
+            loadingEl.style.display = 'flex';
+            loadingEl.innerHTML = `
+                <div style="text-align: center; color: var(--text-secondary);">
+                    <p style="font-size: 1.2em; margin-bottom: 0.5rem;">Failed to load PDF</p>
+                    <p style="font-size: 0.9em;">${error.message}</p>
+                    <p style="font-size: 0.85em; margin-top: 1rem; opacity: 0.7;">The PDF may be too large or the URL is incorrect.</p>
+                </div>
+            `;
+        }
     }
 }
 
 // Render all PDF pages
 async function renderAllPages() {
-    if (!currentPDF || totalPages === 0) return;
+    if (!currentPDF || totalPages === 0 || isRenderingPages) return;
+    isRenderingPages = true;
     
     const canvasContainer = document.getElementById('pdfCanvasContainer');
     pageCanvases = [];
     
-    // Clear container
     canvasContainer.innerHTML = '';
+    const loading = document.createElement('div');
+    loading.className = 'pdf-loading';
+    loading.id = 'pdfLoading';
+    loading.innerHTML = `
+        <div class="spinner"></div>
+        <p>Rendering pages…</p>
+    `;
+    canvasContainer.appendChild(loading);
     
-    // Get device pixel ratio for high-quality rendering
     const dpr = window.devicePixelRatio || 1;
     
-    // Calculate scale to fit container width (edge-to-edge)
-    // Wait a bit for container to be properly sized
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 50));
     const containerWidth = canvasContainer.clientWidth || window.innerWidth - 40;
     const firstPage = await currentPDF.getPage(1);
     const viewport = firstPage.getViewport({ scale: 1.0 });
-    const scale = Math.min(containerWidth / viewport.width, 2.5); // Max 2.5x zoom for clarity
+    fitScale = Math.min(containerWidth / viewport.width, 2.5);
+    const scale = fitScale * zoomFactor;
     
     try {
-        // Render all pages
         for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+            if (!currentPDF) break;
             const page = await currentPDF.getPage(pageNum);
             const scaledViewport = page.getViewport({ scale: scale });
             
-            // Create canvas for each page with high DPR
             const pageCanvas = document.createElement('canvas');
             pageCanvas.className = 'pdf-page-canvas';
             pageCanvas.setAttribute('data-page', pageNum);
             pageCanvas.id = `pdf-page-${pageNum}`;
             
-            // Set canvas size with DPR for crisp rendering
             pageCanvas.width = scaledViewport.width * dpr;
             pageCanvas.height = scaledViewport.height * dpr;
             pageCanvas.style.width = scaledViewport.width + 'px';
@@ -754,21 +994,21 @@ async function renderAllPages() {
             const context = pageCanvas.getContext('2d');
             context.scale(dpr, dpr);
             
-            // Render page with high quality
-            const renderContext = {
+            await page.render({
                 canvasContext: context,
                 viewport: scaledViewport
-            };
+            }).promise;
             
-            await page.render(renderContext).promise;
-            
-            // Add canvas to container
             canvasContainer.appendChild(pageCanvas);
             pageCanvases.push(pageCanvas);
         }
         
     } catch (error) {
         console.error('Error rendering pages:', error);
+    } finally {
+        loading.style.display = 'none';
+        isRenderingPages = false;
+        updateZoomLabel();
     }
 }
 
@@ -967,18 +1207,33 @@ function closePDF() {
     }
     
     // Clear PDF
+    if (currentPdfName && currentPage > 0) {
+        saveReadingProgress(currentPdfName, currentPage);
+    }
     currentPDF = null;
+    currentPdfName = null;
+    currentPdfCategory = null;
     currentPage = 1;
     totalPages = 0;
     pdfOutline = null;
     pageCanvases = [];
+    zoomFactor = 1;
     teardownPageTracking();
     
     // Clear canvas container
     const canvasContainer = document.getElementById('pdfCanvasContainer');
     if (canvasContainer) {
-        canvasContainer.innerHTML = '';
+        canvasContainer.innerHTML = `
+            <div class="pdf-loading" id="pdfLoading">
+                <div class="spinner"></div>
+                <p>Loading PDF…</p>
+            </div>
+        `;
     }
+
+    // Refresh cards so resume hints update
+    renderSections();
+    renderFavorites();
 }
 
 // Toggle fullscreen
@@ -1198,7 +1453,9 @@ document.addEventListener('DOMContentLoaded', () => {
         renderCategoryFilters();
         renderSections();
         renderRecentPDFs();
+        renderFavorites();
         setupHeaderScroll();
+        updateZoomLabel();
 
         const themeToggle = document.getElementById('themeToggle');
         if (themeToggle) {
@@ -1220,8 +1477,27 @@ document.addEventListener('DOMContentLoaded', () => {
             resetFiltersBtn.addEventListener('click', resetFilters);
         }
 
+        const zoomInBtn = document.getElementById('zoomInBtn');
+        const zoomOutBtn = document.getElementById('zoomOutBtn');
+        const zoomFitBtn = document.getElementById('zoomFitBtn');
+        if (zoomInBtn) zoomInBtn.addEventListener('click', () => changeZoom(ZOOM_STEP));
+        if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => changeZoom(-ZOOM_STEP));
+        if (zoomFitBtn) zoomFitBtn.addEventListener('click', () => fitZoomWidth());
+
+        const pageJumpInput = document.getElementById('pageJumpInput');
+        if (pageJumpInput) {
+            pageJumpInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    jumpToPageFromInput();
+                    pageJumpInput.blur();
+                }
+            });
+            pageJumpInput.addEventListener('change', jumpToPageFromInput);
+        }
+
         document.addEventListener('click', (e) => {
-            if (e.target.closest('.filter-btn') || e.target.closest('.recent-item')) {
+            if (e.target.closest('.filter-btn') || e.target.closest('.recent-item') || e.target.closest('.favorite-item')) {
                 setTimeout(closeMobileMenu, 300);
             }
         });

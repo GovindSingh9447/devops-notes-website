@@ -688,6 +688,61 @@ button,
     display: flex;
     flex-direction: column;
     box-shadow: var(--shadow-sm);
+    position: relative;
+}
+
+.card-bookmark {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 2;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    backdrop-filter: blur(8px);
+    color: var(--ink-faint);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    transition: color 0.2s var(--ease), background 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+
+.card-bookmark:hover,
+.card-bookmark.active {
+    color: var(--brand);
+    border-color: color-mix(in srgb, var(--brand) 35%, var(--border));
+    background: var(--surface);
+}
+
+.pdf-progress {
+    margin-top: 0.2rem;
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    color: var(--brand);
+    font-weight: 500;
+}
+
+.favorites-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.favorite-item {
+    position: relative;
+}
+
+.sidebar-star {
+    border: none;
+    background: transparent;
+    color: var(--brand);
+    cursor: pointer;
+    font-size: 0.95rem;
+    padding: 0.2rem;
+    flex-shrink: 0;
+    line-height: 1;
 }
 
 @keyframes cardIn {
@@ -1044,40 +1099,124 @@ button,
     font-weight: 500;
 }
 
-.page-indicator {
+.page-jump {
     display: none;
-    align-items: baseline;
-    gap: 0.15rem;
-    padding: 0.45rem 0.85rem;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.65rem;
     border-radius: 999px;
     border: 1px solid var(--border);
     background: var(--surface);
     font-family: var(--font-mono);
     font-size: 0.85rem;
-    font-weight: 500;
     color: var(--ink);
-    letter-spacing: -0.02em;
     flex-shrink: 0;
-    user-select: none;
     box-shadow: var(--shadow-sm);
 }
 
-.page-indicator.visible {
+.page-jump.visible {
     display: inline-flex;
 }
 
-.page-indicator .page-sep {
+.page-jump-label {
+    font-size: 0.72rem;
     color: var(--ink-faint);
-    margin: 0 0.05rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 
-#currentPageNum {
+.page-jump-input {
+    width: 3.2rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-2);
     color: var(--brand);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
     font-weight: 600;
+    text-align: center;
+    padding: 0.25rem 0.2rem;
+    -moz-appearance: textfield;
+}
+
+.page-jump-input::-webkit-outer-spin-button,
+.page-jump-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.page-jump-input:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--brand) 45%, var(--border));
+    box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.page-jump .page-sep {
+    color: var(--ink-faint);
 }
 
 #totalPageNum {
     color: var(--ink-muted);
+    min-width: 1.5rem;
+}
+
+.zoom-controls {
+    display: none;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+    box-shadow: var(--shadow-sm);
+}
+
+.zoom-controls.visible {
+    display: inline-flex;
+}
+
+.zoom-btn,
+.zoom-fit-btn {
+    min-width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink-muted);
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: background 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+.zoom-fit-btn {
+    padding: 0 0.55rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.zoom-btn:hover:not(:disabled),
+.zoom-fit-btn:hover {
+    background: var(--brand-soft);
+    color: var(--brand);
+}
+
+.zoom-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.zoom-level {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--ink-muted);
+    min-width: 2.8rem;
+    text-align: center;
 }
 
 .page-indicator-float {
@@ -1118,6 +1257,12 @@ button,
 
 .page-indicator-float #floatTotalPage {
     color: var(--ink-muted);
+}
+
+.action-btn.bookmark-btn.active {
+    color: var(--brand);
+    border-color: color-mix(in srgb, var(--brand) 35%, var(--border));
+    background: var(--brand-soft);
 }
 
 .modal-actions {
@@ -1306,19 +1451,34 @@ button,
         gap: 0.85rem;
     }
 
-    .page-indicator {
+    .page-jump {
         font-size: 0.78rem;
-        padding: 0.4rem 0.7rem;
+        padding: 0.3rem 0.55rem;
+    }
+
+    .page-jump-label {
+        display: none;
+    }
+
+    .zoom-level {
+        display: none;
+    }
+}
+
+@media (max-width: 900px) {
+    .zoom-controls.visible {
+        display: none;
     }
 }
 
 @media (max-width: 720px) {
-    .page-indicator {
-        display: none !important;
+    .modal-header {
+        flex-wrap: wrap;
+        gap: 0.5rem;
     }
 
-    .page-indicator.visible {
-        display: none !important;
+    .page-jump.visible {
+        order: 3;
     }
 
     .page-indicator-float.visible {
