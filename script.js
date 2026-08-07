@@ -108,7 +108,12 @@ const MAX_CACHE_SIZE = 50; // Maximum number of thumbnails to cache
 let thumbnailCache = {};
 let totalPDFCount = 0;
 let currentFilter = 'all';
+let currentView = localStorage.getItem('libraryView') || 'grid';
 let observer = null;
+
+const PLACEHOLDER_SVG = `
+    <div class="pdf-thumbnail-placeholder" aria-hidden="true"></div>
+`;
 
 // Initialize cache from localStorage
 function initCache() {
@@ -242,8 +247,7 @@ function loadThumbnail(pdfCard, pdfName) {
                 thumbnailContainer.appendChild(img);
             };
         } else {
-            // Show placeholder
-            thumbnailContainer.innerHTML = '<div class="pdf-thumbnail-placeholder">📄</div>';
+            thumbnailContainer.innerHTML = PLACEHOLDER_SVG;
         }
     });
 }
@@ -279,22 +283,26 @@ function setupLazyLoading() {
 function renderCategoryFilters() {
     const filtersContainer = document.getElementById('categoryFilters');
     filtersContainer.innerHTML = '';
-    
-    // Add "All" filter
+
+    const libraryTotal = Object.values(pdfCategories).reduce((sum, list) => sum + list.length, 0);
+
     const allBtn = document.createElement('button');
     allBtn.className = `filter-btn ${currentFilter === 'all' ? 'active' : ''}`;
+    allBtn.setAttribute('role', 'option');
+    allBtn.setAttribute('aria-selected', currentFilter === 'all' ? 'true' : 'false');
     allBtn.innerHTML = `
-        <span>All Categories</span>
-        <span class="filter-count">${totalPDFCount}</span>
+        <span>All categories</span>
+        <span class="filter-count">${libraryTotal}</span>
     `;
     allBtn.onclick = () => setFilter('all');
     filtersContainer.appendChild(allBtn);
-    
-    // Add category filters
+
     Object.keys(pdfCategories).forEach(category => {
         const count = pdfCategories[category].length;
         const btn = document.createElement('button');
         btn.className = `filter-btn ${currentFilter === category ? 'active' : ''}`;
+        btn.setAttribute('role', 'option');
+        btn.setAttribute('aria-selected', currentFilter === category ? 'true' : 'false');
         btn.innerHTML = `
             <span>${category}</span>
             <span class="filter-count">${count}</span>
@@ -307,10 +315,44 @@ function renderCategoryFilters() {
 // Set filter
 function setFilter(category) {
     currentFilter = category;
+    updateActiveFilterLabel();
     renderCategoryFilters();
     renderSections();
-    // Close mobile menu after filter is applied
     closeMobileMenu();
+}
+
+function updateActiveFilterLabel() {
+    const label = document.getElementById('activeFilterLabel');
+    if (!label) return;
+    label.textContent = currentFilter === 'all' ? 'All categories' : currentFilter;
+}
+
+function setViewMode(mode) {
+    currentView = mode === 'list' ? 'list' : 'grid';
+    localStorage.setItem('libraryView', currentView);
+
+    const sections = document.getElementById('pdfSections');
+    if (sections) sections.setAttribute('data-view', currentView);
+
+    const gridBtn = document.getElementById('viewGrid');
+    const listBtn = document.getElementById('viewList');
+    if (gridBtn && listBtn) {
+        gridBtn.classList.toggle('active', currentView === 'grid');
+        listBtn.classList.toggle('active', currentView === 'list');
+        gridBtn.setAttribute('aria-pressed', currentView === 'grid' ? 'true' : 'false');
+        listBtn.setAttribute('aria-pressed', currentView === 'list' ? 'true' : 'false');
+    }
+}
+
+function resetFilters() {
+    currentFilter = 'all';
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) searchInput.value = '';
+    const clearBtn = document.getElementById('clearSearch');
+    if (clearBtn) clearBtn.style.display = 'none';
+    updateActiveFilterLabel();
+    renderCategoryFilters();
+    renderSections();
 }
 
 // Render recent PDFs
@@ -331,9 +373,9 @@ function renderRecentPDFs() {
         
         // Try to get cached thumbnail
         const thumb = thumbnailCache[item.name]?.dataUrl;
-        const thumbHtml = thumb 
-            ? `<img src="${thumb}" alt="${item.name}" class="recent-thumb">`
-            : `<div class="recent-thumb" style="display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">📄</div>`;
+        const thumbHtml = thumb
+            ? `<img src="${thumb}" alt="" class="recent-thumb">`
+            : `<div class="recent-thumb pdf-thumbnail-placeholder" aria-hidden="true"></div>`;
         
         const timeAgo = getTimeAgo(item.timestamp);
         
@@ -370,73 +412,93 @@ function updateCachedCount() {
 // Render sections
 function renderSections() {
     const sectionsContainer = document.getElementById('pdfSections');
+    const emptyResults = document.getElementById('emptyResults');
     sectionsContainer.innerHTML = '';
+    sectionsContainer.setAttribute('data-view', currentView);
     totalPDFCount = 0;
-    
-    const categories = currentFilter === 'all' 
+
+    const categories = currentFilter === 'all'
         ? Object.keys(pdfCategories)
         : [currentFilter];
-    
-    categories.forEach(category => {
+
+    const searchTerm = (document.getElementById('searchInput')?.value || '').toLowerCase();
+    let cardIndex = 0;
+
+    categories.forEach((category, sectionIndex) => {
         const pdfs = pdfCategories[category];
         if (pdfs.length === 0) return;
-        
-        // Filter by search if active
-        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-        const filteredPDFs = searchTerm 
-            ? pdfs.filter(pdf => pdf.toLowerCase().includes(searchTerm))
+
+        const filteredPDFs = searchTerm
+            ? pdfs.filter(pdf =>
+                pdf.toLowerCase().includes(searchTerm) ||
+                category.toLowerCase().includes(searchTerm)
+              )
             : pdfs;
-        
+
         if (filteredPDFs.length === 0) return;
-        
+
         totalPDFCount += filteredPDFs.length;
-        
-        const section = document.createElement('div');
+
+        const section = document.createElement('section');
         section.className = 'section';
-        
+        section.style.animationDelay = `${Math.min(sectionIndex, 6) * 40}ms`;
+
         const sectionHeader = document.createElement('div');
         sectionHeader.className = 'section-header';
-        
+
         const sectionTitle = document.createElement('h2');
         sectionTitle.className = 'section-title';
         sectionTitle.innerHTML = `
             ${category}
-            <span class="section-count">(${filteredPDFs.length})</span>
+            <span class="section-count">${filteredPDFs.length}</span>
         `;
-        
+
         sectionHeader.appendChild(sectionTitle);
-        
+
         const pdfGrid = document.createElement('div');
         pdfGrid.className = 'pdf-grid';
-        
+
         filteredPDFs.forEach(pdfName => {
-            const pdfCard = document.createElement('div');
+            const pdfCard = document.createElement('article');
             pdfCard.className = 'pdf-card';
             pdfCard.setAttribute('data-pdf', pdfName);
+            pdfCard.setAttribute('tabindex', '0');
+            pdfCard.setAttribute('role', 'button');
+            pdfCard.setAttribute('aria-label', `Open ${pdfName.replace('.pdf', '')}`);
+            pdfCard.style.animationDelay = `${Math.min(cardIndex, 20) * 25}ms`;
+            cardIndex += 1;
             pdfCard.onclick = () => openPDF(pdfName, category);
-            
+            pdfCard.onkeydown = (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openPDF(pdfName, category);
+                }
+            };
+
             pdfCard.innerHTML = `
                 <div class="pdf-thumbnail">
-                    <div class="pdf-thumbnail-placeholder">📄</div>
+                    ${PLACEHOLDER_SVG}
                 </div>
                 <div class="pdf-info">
                     <div class="pdf-name">${pdfName.replace('.pdf', '')}</div>
                     <div class="pdf-category">${category}</div>
                 </div>
             `;
-            
+
             pdfGrid.appendChild(pdfCard);
         });
-        
+
         section.appendChild(sectionHeader);
         section.appendChild(pdfGrid);
         sectionsContainer.appendChild(section);
     });
-    
-    // Update total count
+
     document.getElementById('totalPDFs').textContent = totalPDFCount;
-    
-    // Setup lazy loading after a short delay
+
+    if (emptyResults) {
+        emptyResults.hidden = totalPDFCount > 0;
+    }
+
     setTimeout(() => {
         setupLazyLoading();
     }, 100);
@@ -448,6 +510,95 @@ let currentPage = 1;
 let totalPages = 0;
 let pdfOutline = null;
 let pageCanvases = [];
+let pageTrackRaf = null;
+let pageTrackBound = false;
+
+function updatePageIndicator(page) {
+    if (page && page >= 1) {
+        currentPage = Math.min(page, totalPages || page);
+    }
+
+    const currentEl = document.getElementById('currentPageNum');
+    const totalEl = document.getElementById('totalPageNum');
+    const floatCurrent = document.getElementById('floatCurrentPage');
+    const floatTotal = document.getElementById('floatTotalPage');
+    const headerIndicator = document.getElementById('pageIndicator');
+    const floatIndicator = document.getElementById('pageIndicatorFloat');
+
+    const cur = String(currentPage || 1);
+    const tot = String(totalPages || 1);
+
+    if (currentEl) currentEl.textContent = cur;
+    if (totalEl) totalEl.textContent = tot;
+    if (floatCurrent) floatCurrent.textContent = cur;
+    if (floatTotal) floatTotal.textContent = tot;
+
+    const show = totalPages > 0;
+    if (headerIndicator) headerIndicator.classList.toggle('visible', show);
+    if (floatIndicator) floatIndicator.classList.toggle('visible', show);
+}
+
+function getVisiblePageNumber() {
+    const scrollRoot = document.getElementById('pdfViewerScroll') ||
+        document.querySelector('.pdf-viewer-container');
+    if (!scrollRoot || !pageCanvases.length) return currentPage || 1;
+
+    const rootRect = scrollRoot.getBoundingClientRect();
+    // Prefer the page near the upper reading band
+    const targetY = rootRect.top + rootRect.height * 0.28;
+
+    let bestPage = 1;
+    let bestDist = Infinity;
+
+    pageCanvases.forEach((canvas) => {
+        const pageNum = parseInt(canvas.getAttribute('data-page'), 10);
+        if (!pageNum) return;
+        const rect = canvas.getBoundingClientRect();
+        if (rect.bottom < rootRect.top || rect.top > rootRect.bottom) return;
+
+        const dist = Math.abs(rect.top - targetY);
+        if (dist < bestDist) {
+            bestDist = dist;
+            bestPage = pageNum;
+        }
+    });
+
+    return bestPage;
+}
+
+function onPdfScrollTrack() {
+    if (pageTrackRaf) return;
+    pageTrackRaf = requestAnimationFrame(() => {
+        pageTrackRaf = null;
+        const page = getVisiblePageNumber();
+        if (page !== currentPage) {
+            updatePageIndicator(page);
+        }
+    });
+}
+
+function setupPageTracking() {
+    const scrollRoot = document.getElementById('pdfViewerScroll') ||
+        document.querySelector('.pdf-viewer-container');
+    if (!scrollRoot) return;
+
+    if (!pageTrackBound) {
+        scrollRoot.addEventListener('scroll', onPdfScrollTrack, { passive: true });
+        pageTrackBound = true;
+    }
+
+    updatePageIndicator(1);
+    // Sync once layout settles
+    setTimeout(() => updatePageIndicator(getVisiblePageNumber()), 50);
+}
+
+function teardownPageTracking() {
+    updatePageIndicator(1);
+    const headerIndicator = document.getElementById('pageIndicator');
+    const floatIndicator = document.getElementById('pageIndicatorFloat');
+    if (headerIndicator) headerIndicator.classList.remove('visible');
+    if (floatIndicator) floatIndicator.classList.remove('visible');
+}
 
 // Open PDF
 async function openPDF(pdfName, category) {
@@ -516,6 +667,7 @@ async function openPDF(pdfName, category) {
         
         currentPDF = await loadingTask.promise;
         totalPages = currentPDF.numPages;
+        updatePageIndicator(1);
         
         // Get PDF outline (table of contents)
         try {
@@ -539,8 +691,9 @@ async function openPDF(pdfName, category) {
         // Hide loading
         pdfLoading.style.display = 'none';
         
-        // Setup header scroll behavior
+        // Track visible page + header scroll behavior
         setTimeout(() => {
+            setupPageTracking();
             setupHeaderScrollBehavior();
         }, 100);
         
@@ -736,8 +889,9 @@ function scrollToPage(pageNum, event) {
     const pageCanvas = document.getElementById(`pdf-page-${pageNum}`);
     if (pageCanvas) {
         pageCanvas.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        updatePageIndicator(pageNum);
         // Highlight the page briefly
-        pageCanvas.style.boxShadow = '0 0 20px rgba(102, 126, 234, 0.6)';
+        pageCanvas.style.boxShadow = '0 0 20px rgba(15, 118, 110, 0.45)';
         setTimeout(() => {
             pageCanvas.style.boxShadow = '';
         }, 2000);
@@ -818,6 +972,7 @@ function closePDF() {
     totalPages = 0;
     pdfOutline = null;
     pageCanvases = [];
+    teardownPageTracking();
     
     // Clear canvas container
     const canvasContainer = document.getElementById('pdfCanvasContainer');
@@ -860,53 +1015,48 @@ let lastScrollTop = 0;
 let isScrolling = false;
 
 function setupHeaderScrollBehavior() {
-    const pdfCanvasContainer = document.getElementById('pdfCanvasContainer');
+    const scrollRoot = document.getElementById('pdfViewerScroll') ||
+        document.querySelector('.pdf-viewer-container');
     const modalHeader = document.querySelector('.modal-header');
     const modalContent = document.querySelector('.modal-content');
     
-    if (!pdfCanvasContainer || !modalHeader || !modalContent) return;
+    if (!scrollRoot || !modalHeader || !modalContent) return;
     
     // Reset scroll tracking
     lastScrollTop = 0;
     isScrolling = false;
     
-    pdfCanvasContainer.addEventListener('scroll', () => {
-        const scrollTop = pdfCanvasContainer.scrollTop;
+    scrollRoot.addEventListener('scroll', () => {
+        const scrollTop = scrollRoot.scrollTop;
         const isScrollingDown = scrollTop > lastScrollTop && scrollTop > 100;
         const scrollThreshold = 100;
         
-        // Clear existing timeout
         if (scrollTimeout) {
             clearTimeout(scrollTimeout);
         }
         
         isScrolling = true;
         
-        // Show header when scrolling up or at top
         if (scrollTop < scrollThreshold || !isScrollingDown) {
             modalHeader.classList.remove('hidden');
         } else if (scrollTop > scrollThreshold && isScrollingDown) {
-            // Hide header when scrolling down
             modalHeader.classList.add('hidden');
         }
         
         lastScrollTop = scrollTop;
         
-        // Show header after scrolling stops
         scrollTimeout = setTimeout(() => {
             isScrolling = false;
             modalHeader.classList.remove('hidden');
         }, 2000);
-    });
+    }, { passive: true });
     
-    // Show header on hover over modal
     modalContent.addEventListener('mouseenter', () => {
         if (!isScrolling) {
             modalHeader.classList.remove('hidden');
         }
     });
     
-    // Always show header when hovering over it
     modalHeader.addEventListener('mouseenter', () => {
         modalHeader.classList.remove('hidden');
         if (scrollTimeout) {
@@ -914,7 +1064,6 @@ function setupHeaderScrollBehavior() {
         }
     });
     
-    // Show header when mouse moves to top of modal
     modalContent.addEventListener('mousemove', (e) => {
         if (e.clientY < 100) {
             modalHeader.classList.remove('hidden');
@@ -950,8 +1099,21 @@ function toggleTheme() {
 
 function updateThemeIcon(theme) {
     const icon = document.querySelector('.theme-icon');
-    if (icon) {
-        icon.textContent = theme === 'dark' ? '☀️' : '🌙';
+    if (!icon) return;
+
+    if (theme === 'dark') {
+        icon.innerHTML = `
+            <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <circle cx="12" cy="12" r="4"></circle>
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+            </svg>
+        `;
+    } else {
+        icon.innerHTML = `
+            <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/>
+            </svg>
+        `;
     }
 }
 
@@ -981,17 +1143,17 @@ function clearSearch() {
 function toggleMobileMenu() {
     const sidebar = document.querySelector('.sidebar');
     const overlay = document.getElementById('sidebarOverlay');
-    
+    const menuBtn = document.getElementById('mobileMenuBtn');
+
     if (sidebar && overlay) {
         sidebar.classList.toggle('open');
         overlay.classList.toggle('active');
-        
-        // Prevent body scroll when menu is open
-        if (sidebar.classList.contains('open')) {
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = '';
-        }
+        overlay.hidden = !overlay.classList.contains('active');
+
+        const isOpen = sidebar.classList.contains('open');
+        if (menuBtn) menuBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+
+        document.body.style.overflow = isOpen ? 'hidden' : '';
     }
 }
 
@@ -999,48 +1161,71 @@ function toggleMobileMenu() {
 function closeMobileMenu() {
     const sidebar = document.querySelector('.sidebar');
     const overlay = document.getElementById('sidebarOverlay');
-    
+    const menuBtn = document.getElementById('mobileMenuBtn');
+
     if (sidebar && overlay) {
         sidebar.classList.remove('open');
         overlay.classList.remove('active');
+        overlay.hidden = true;
+        if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
         document.body.style.overflow = '';
     }
 }
 
+function setupHeaderScroll() {
+    const header = document.querySelector('.main-header');
+    if (!header) return;
+
+    const onScroll = () => {
+        header.classList.toggle('is-scrolled', window.scrollY > 8);
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    // Wait for PDF.js to load if available
     const initApp = () => {
         if (typeof pdfjsLib !== 'undefined') {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         }
-        
+
         initCache();
         initTheme();
+        setViewMode(currentView);
+        updateActiveFilterLabel();
         renderCategoryFilters();
         renderSections();
         renderRecentPDFs();
-        
-        // Theme toggle
+        setupHeaderScroll();
+
         const themeToggle = document.getElementById('themeToggle');
         if (themeToggle) {
             themeToggle.addEventListener('click', toggleTheme);
         }
-        
-        // Mobile menu toggle
+
         const mobileMenuBtn = document.getElementById('mobileMenuBtn');
         if (mobileMenuBtn) {
             mobileMenuBtn.addEventListener('click', toggleMobileMenu);
         }
-        
-        // Close mobile menu when clicking on filter buttons (event delegation)
+
+        const viewGrid = document.getElementById('viewGrid');
+        const viewList = document.getElementById('viewList');
+        if (viewGrid) viewGrid.addEventListener('click', () => setViewMode('grid'));
+        if (viewList) viewList.addEventListener('click', () => setViewMode('list'));
+
+        const resetFiltersBtn = document.getElementById('resetFiltersBtn');
+        if (resetFiltersBtn) {
+            resetFiltersBtn.addEventListener('click', resetFilters);
+        }
+
         document.addEventListener('click', (e) => {
             if (e.target.closest('.filter-btn') || e.target.closest('.recent-item')) {
                 setTimeout(closeMobileMenu, 300);
             }
         });
-        
-        // Search
+
         const searchInput = document.getElementById('searchInput');
         if (searchInput) {
             searchInput.addEventListener('keypress', (e) => {
@@ -1051,53 +1236,62 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             searchInput.addEventListener('input', filterPDFs);
         }
-        
-        // Clear search
+
         const clearSearchBtn = document.getElementById('clearSearch');
         if (clearSearchBtn) {
             clearSearchBtn.addEventListener('click', clearSearch);
         }
-        
-        // Fullscreen events
+
         document.addEventListener('fullscreenchange', updateFullscreenIcon);
         document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
         document.addEventListener('mozfullscreenchange', updateFullscreenIcon);
         document.addEventListener('MSFullscreenChange', updateFullscreenIcon);
-        
-    // Handle browser back button
-    window.addEventListener('popstate', (e) => {
-        const modal = document.getElementById('pdfModal');
-        if (modal && modal.classList.contains('active')) {
-            closePDF();
-        }
-    });
-    
-    // Keyboard navigation for PDF viewer
-    document.addEventListener('keydown', (e) => {
-        const modal = document.getElementById('pdfModal');
-        if (modal && modal.classList.contains('active')) {
-            // Only handle Escape key when modal is active
-            if (e.key === 'Escape') {
-                if (document.fullscreenElement || document.webkitFullscreenElement || 
+
+        window.addEventListener('popstate', () => {
+            const modal = document.getElementById('pdfModal');
+            if (modal && modal.classList.contains('active')) {
+                closePDF();
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            const modal = document.getElementById('pdfModal');
+            const modalOpen = modal && modal.classList.contains('active');
+            const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+            const typing = tag === 'input' || tag === 'textarea' || e.target?.isContentEditable;
+
+            if (modalOpen && e.key === 'Escape') {
+                if (document.fullscreenElement || document.webkitFullscreenElement ||
                     document.mozFullScreenElement || document.msFullscreenElement) {
                     toggleFullscreen();
                 } else {
                     closePDF();
-                    // Remove hash from URL
                     if (window.history && window.history.replaceState) {
                         window.history.replaceState(null, '', window.location.pathname);
                     }
                 }
+                return;
             }
-        }
-    });
+
+            // Slash focuses search when not typing / viewing PDF
+            if (!modalOpen && !typing && e.key === '/') {
+                e.preventDefault();
+                searchInput?.focus();
+                searchInput?.select();
+            }
+
+            if (!modalOpen && e.key === 'Escape') {
+                closeMobileMenu();
+                if (document.getElementById('searchInput')?.value) {
+                    clearSearch();
+                }
+            }
+        });
     };
-    
-    // If PDF.js is already loaded, initialize immediately
+
     if (typeof pdfjsLib !== 'undefined') {
         initApp();
     } else {
-        // Wait a bit for PDF.js to load
         setTimeout(() => {
             initApp();
         }, 100);

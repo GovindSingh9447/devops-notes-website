@@ -3,46 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="description" content="A curated DevOps notes library — cloud, Kubernetes, CI/CD, and more.">
     <title>DevOps Notes Library</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="toc-styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Source+Sans+Pro:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" 
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
             onerror="console.error('Failed to load PDF.js library')"></script>
-    <!-- PDF Repository Configuration - Update config.js with your GitHub details -->
     <script src="config.js"></script>
 </head>
 <body>
+    <div class="ambient" aria-hidden="true"></div>
+
     <div class="app-wrapper">
-        <!-- Sidebar -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar" aria-label="Library navigation">
             <div class="sidebar-header">
-                <h1 class="logo">📚</h1>
-                <h2 class="logo-text">DevOps Library</h2>
+                <a href="/" class="brand" aria-label="DevOps Library home">
+                    <span class="brand-mark" aria-hidden="true">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                            <path d="M8 7h8M8 11h5"/>
+                        </svg>
+                    </span>
+                    <span class="brand-text">
+                        <span class="brand-name">DevOps Library</span>
+                        <span class="brand-tag">Notes &amp; guides</span>
+                    </span>
+                </a>
             </div>
-            
+
             <nav class="sidebar-nav">
                 <div class="nav-section">
-                    <h3 class="nav-title">Categories</h3>
-                    <div class="nav-filters" id="categoryFilters"></div>
+                    <h3 class="nav-title">Browse</h3>
+                    <div class="nav-filters" id="categoryFilters" role="listbox" aria-label="Categories"></div>
                 </div>
-                
+
                 <div class="nav-section">
-                    <h3 class="nav-title">Quick Access</h3>
+                    <h3 class="nav-title">Continue reading</h3>
                     <div class="recent-pdfs" id="recentPDFs">
-                        <p class="empty-state">No recent PDFs</p>
+                        <p class="empty-state">Open a note to see it here</p>
                     </div>
                 </div>
             </nav>
-            
+
             <div class="sidebar-footer">
-                <div class="stats-card">
+                <div class="stats-card" aria-live="polite">
                     <div class="stat-item">
                         <span class="stat-number" id="totalPDFs">0</span>
-                        <span class="stat-label">Total PDFs</span>
+                        <span class="stat-label">Notes</span>
                     </div>
+                    <div class="stat-divider" aria-hidden="true"></div>
                     <div class="stat-item">
                         <span class="stat-number" id="cachedCount">0</span>
                         <span class="stat-label">Cached</span>
@@ -51,32 +64,64 @@
             </div>
         </aside>
 
-        <!-- Main Content -->
         <main class="main-content">
             <header class="main-header">
                 <div class="header-top">
-                    <button class="mobile-menu-btn" id="mobileMenuBtn" title="Toggle menu">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="3" y1="6" x2="21" y2="6"></line>
-                            <line x1="3" y1="12" x2="21" y2="12"></line>
-                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                    <button class="icon-btn mobile-menu-btn" id="mobileMenuBtn" title="Open menu" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="4" y1="7" x2="20" y2="7"></line>
+                            <line x1="4" y1="12" x2="20" y2="12"></line>
+                            <line x1="4" y1="17" x2="14" y2="17"></line>
                         </svg>
                     </button>
-                    <h1 class="page-title">DevOps Notes Collection</h1>
-                    <button class="theme-toggle" id="themeToggle" title="Toggle theme">
-                        <span class="theme-icon">🌙</span>
-                    </button>
+
+                    <div class="header-copy">
+                        <p class="eyebrow" id="activeFilterLabel">All categories</p>
+                        <h1 class="page-title">DevOps Notes</h1>
+                    </div>
+
+                    <div class="header-actions">
+                        <div class="view-toggle" role="group" aria-label="View mode">
+                            <button type="button" class="view-btn active" id="viewGrid" title="Grid view" aria-pressed="true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+                                    <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+                                    <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+                                    <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+                                </svg>
+                            </button>
+                            <button type="button" class="view-btn" id="viewList" title="List view" aria-pressed="false">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="8" y1="6" x2="21" y2="6"></line>
+                                    <line x1="8" y1="12" x2="21" y2="12"></line>
+                                    <line x1="8" y1="18" x2="21" y2="18"></line>
+                                    <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                                    <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                                    <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <button class="icon-btn theme-toggle" id="themeToggle" title="Toggle theme" aria-label="Toggle color theme">
+                            <span class="theme-icon" aria-hidden="true">
+                                <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/>
+                                </svg>
+                            </span>
+                        </button>
+                    </div>
                 </div>
-                <p class="page-subtitle">Your comprehensive collection of DevOps resources and documentation</p>
-                
+
+                <p class="page-subtitle">Search, skim, and open notes without losing your place.</p>
+
                 <div class="search-container">
                     <div class="search-wrapper">
-                        <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <circle cx="11" cy="11" r="8"></circle>
                             <path d="m21 21-4.35-4.35"></path>
                         </svg>
-                        <input type="text" id="searchInput" class="search-input" placeholder="Search PDFs by name, category..." autocomplete="off">
-                        <button class="clear-search" id="clearSearch" style="display: none;" title="Clear search">
+                        <input type="search" id="searchInput" class="search-input" placeholder="Search by title or category…" autocomplete="off" aria-label="Search notes">
+                        <kbd class="search-kbd" aria-hidden="true">/</kbd>
+                        <button class="clear-search" id="clearSearch" style="display: none;" title="Clear search" aria-label="Clear search">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
                                 <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -87,29 +132,43 @@
             </header>
 
             <div class="content-area">
-                <div id="pdfSections" class="sections-container"></div>
+                <div id="pdfSections" class="sections-container" data-view="grid"></div>
+                <div id="emptyResults" class="empty-results" hidden>
+                    <div class="empty-results-icon" aria-hidden="true">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                    </div>
+                    <h2>No notes match</h2>
+                    <p>Try another keyword or clear the filter.</p>
+                    <button type="button" class="text-btn" id="resetFiltersBtn">Clear search &amp; filters</button>
+                </div>
                 <div id="loadingIndicator" class="loading-indicator" style="display: none;">
                     <div class="spinner"></div>
-                    <p>Loading PDFs...</p>
+                    <p>Loading notes…</p>
                 </div>
-                
-                <!-- Content Disclaimer Notice -->
+
                 <div class="content-notice">
-                    <div class="notice-icon">ℹ️</div>
+                    <div class="notice-icon" aria-hidden="true">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="16" x2="12" y2="12"></line>
+                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                        </svg>
+                    </div>
                     <div class="notice-content">
-                        <h3 class="notice-title">Content Disclaimer</h3>
+                        <h3 class="notice-title">Content disclaimer</h3>
                         <p class="notice-text">
-                            All books and PDFs featured on this website are sourced from online resources and the DevOps community. 
-                            This collection is intended to support DevOps learning and knowledge sharing.
+                            Notes here are gathered from public DevOps resources for learning and knowledge sharing.
                         </p>
                         <p class="notice-text">
-                            <strong>Copyright Notice:</strong> If you are the copyright owner of any content and wish to have it removed, 
-                            please <a href="mailto:govindsingh9447@gmail.com" class="notice-link">contact us</a>. 
-                            We respect intellectual property rights and will promptly remove any content upon request.
+                            <strong>Copyright:</strong> If you own any content and want it removed,
+                            <a href="mailto:govindsingh9447@gmail.com" class="notice-link">contact us</a>.
+                            We respect IP and will remove material promptly.
                         </p>
                         <p class="notice-text notice-small">
-                            This website is for educational purposes only. Please do not file copyright strikes. 
-                            We are committed to maintaining a respectful and legal resource library.
+                            Educational use only. Please prefer a removal request over a copyright strike.
                         </p>
                     </div>
                 </div>
@@ -117,16 +176,15 @@
         </main>
     </div>
 
-    <!-- Mobile Sidebar Overlay -->
-    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeMobileMenu()"></div>
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeMobileMenu()" hidden></div>
 
     <!-- PDF Viewer Modal -->
-    <div id="pdfModal" class="modal">
+    <div id="pdfModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="pdfTitle">
         <div class="modal-overlay" onclick="closePDF()"></div>
         <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title-section">
-                    <button class="back-btn" onclick="closePDF()" title="Back to Home">
+                    <button class="icon-btn back-btn" onclick="closePDF()" title="Back to library" aria-label="Close viewer">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="15 18 9 12 15 6"></polyline>
                         </svg>
@@ -136,8 +194,11 @@
                         <span class="modal-subtitle" id="pdfCategory"></span>
                     </div>
                 </div>
+                <div class="page-indicator" id="pageIndicator" aria-live="polite" title="Current page">
+                    <span id="currentPageNum">1</span><span class="page-sep">/</span><span id="totalPageNum">1</span>
+                </div>
                 <div class="modal-actions">
-                    <button class="action-btn toc-btn" id="tocToggle" onclick="toggleTOC()" title="Table of Contents">
+                    <button class="action-btn toc-btn" id="tocToggle" onclick="toggleTOC()" title="Table of contents">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="8" y1="6" x2="21" y2="6"></line>
                             <line x1="8" y1="12" x2="21" y2="12"></line>
@@ -146,9 +207,9 @@
                             <line x1="3" y1="12" x2="3.01" y2="12"></line>
                             <line x1="3" y1="18" x2="3.01" y2="18"></line>
                         </svg>
-                        <span id="tocText">TOC</span>
+                        <span id="tocText">Contents</span>
                     </button>
-                    <button class="action-btn fullscreen-btn" onclick="toggleFullscreen()" title="Toggle Fullscreen">
+                    <button class="action-btn fullscreen-btn" onclick="toggleFullscreen()" title="Toggle fullscreen">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
                         </svg>
@@ -159,57 +220,59 @@
                             <line x1="18" y1="6" x2="6" y2="18"></line>
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
-                        Close
+                        <span>Close</span>
                     </button>
                 </div>
             </div>
             <div class="pdf-viewer-wrapper">
                 <div class="toc-sidebar" id="tocSidebar">
                     <div class="toc-header">
-                        <h3>Table of Contents</h3>
-                        <button class="toc-close" onclick="toggleTOC()">×</button>
+                        <h3>Contents</h3>
+                        <button class="toc-close" onclick="toggleTOC()" aria-label="Close contents">×</button>
                     </div>
                     <div class="toc-search">
-                        <input type="text" id="tocSearch" placeholder="Search in PDF..." onkeyup="searchTOC()">
+                        <input type="search" id="tocSearch" placeholder="Filter sections…" onkeyup="searchTOC()" aria-label="Filter table of contents">
                     </div>
                     <div class="toc-content" id="tocContent">
-                        <p class="toc-loading">Loading table of contents...</p>
+                        <p class="toc-loading">Loading contents…</p>
                     </div>
                 </div>
-                <div class="pdf-viewer-container">
+                <div class="pdf-viewer-container" id="pdfViewerScroll">
                     <div class="pdf-canvas-container" id="pdfCanvasContainer">
                         <div class="pdf-loading" id="pdfLoading">
                             <div class="spinner"></div>
-                            <p>Loading PDF...</p>
+                            <p>Loading PDF…</p>
                         </div>
                         <canvas id="pdfCanvas"></canvas>
                     </div>
+                </div>
+                <div class="page-indicator-float" id="pageIndicatorFloat" aria-hidden="true">
+                    <span id="floatCurrentPage">1</span><span class="page-sep">/</span><span id="floatTotalPage">1</span>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Footer -->
     <footer class="site-footer">
         <div class="footer-content">
             <div class="footer-wrapper">
                 <div class="footer-developer-section">
                     <p class="footer-developer-text">
-                        <span class="footer-by">Developed by</span>
+                        <span class="footer-by">Built by</span>
                         <a href="https://github.com/GovindSingh9447" target="_blank" rel="noopener noreferrer" class="developer-name-link">
                             <span class="developer-name">GovindSingh9447</span>
                         </a>
                     </p>
                 </div>
-                <div class="footer-divider"></div>
+                <div class="footer-divider" aria-hidden="true"></div>
                 <div class="footer-social-section">
-                    <a href="https://github.com/GovindSingh9447" target="_blank" rel="noopener noreferrer" class="social-icon-link" title="GitHub Profile">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                    <a href="https://github.com/GovindSingh9447" target="_blank" rel="noopener noreferrer" class="social-icon-link" title="GitHub" aria-label="GitHub">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                         </svg>
                     </a>
-                    <a href="https://www.linkedin.com/in/GovindSingh9447" target="_blank" rel="noopener noreferrer" class="social-icon-link" title="LinkedIn Profile">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                    <a href="https://www.linkedin.com/in/GovindSingh9447" target="_blank" rel="noopener noreferrer" class="social-icon-link" title="LinkedIn" aria-label="LinkedIn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
                         </svg>
                     </a>
