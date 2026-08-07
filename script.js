@@ -114,6 +114,7 @@ let thumbnailCache = {};
 let totalPDFCount = 0;
 let currentFilter = 'all';
 let currentView = localStorage.getItem('libraryView') || 'grid';
+let currentSort = localStorage.getItem('librarySort') || 'az';
 let observer = null;
 
 const PLACEHOLDER_SVG = `
@@ -454,6 +455,154 @@ function renderCategoryFilters() {
         btn.onclick = () => setFilter(category);
         filtersContainer.appendChild(btn);
     });
+
+    renderCategoryChips();
+}
+
+function renderCategoryChips() {
+    const chips = document.getElementById('categoryChips');
+    if (!chips) return;
+
+    const libraryTotal = Object.values(pdfCategories).reduce((sum, list) => sum + list.length, 0);
+    const favCount = getBookmarks().length;
+    chips.innerHTML = '';
+
+    const makeChip = (id, label, count) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `category-chip ${currentFilter === id ? 'active' : ''}`;
+        btn.setAttribute('role', 'option');
+        btn.setAttribute('aria-selected', currentFilter === id ? 'true' : 'false');
+        btn.innerHTML = `<span>${label}</span><span class="chip-count">${count}</span>`;
+        btn.onclick = () => setFilter(id);
+        chips.appendChild(btn);
+    };
+
+    makeChip('all', 'All', libraryTotal);
+    makeChip('favorites', 'Favorites', favCount);
+    Object.keys(pdfCategories).forEach(category => {
+        makeChip(category, category, pdfCategories[category].length);
+    });
+}
+
+// Normalize titles for forgiving search (ignore .pdf / punctuation / accents)
+// Fold mathematical / styled Unicode letters into plain ASCII when possible
+function foldStyledLetters(text) {
+    return String(text || '').replace(/[\u{1D400}-\u{1D7FF}]/gu, (ch) => {
+        const cp = ch.codePointAt(0);
+        const ranges = [
+            [0x1D400, 26, 65],  // bold A-Z
+            [0x1D41A, 26, 97],  // bold a-z
+            [0x1D434, 26, 65],  // italic A-Z
+            [0x1D44E, 26, 97],  // italic a-z
+            [0x1D468, 26, 65],  // bold italic A-Z
+            [0x1D482, 26, 97],  // bold italic a-z
+            [0x1D5A0, 26, 65],  // sans A-Z
+            [0x1D5BA, 26, 97],  // sans a-z
+            [0x1D5D4, 26, 65],  // sans bold A-Z
+            [0x1D5EE, 26, 97],  // sans bold a-z
+            [0x1D608, 26, 65],  // sans italic A-Z
+            [0x1D622, 26, 97],  // sans italic a-z
+            [0x1D63C, 26, 65],  // sans bold italic A-Z
+            [0x1D656, 26, 97],  // sans bold italic a-z
+            [0x1D56C, 26, 65],  // bold fraktur A-Z
+            [0x1D586, 26, 97],  // bold fraktur a-z
+        ];
+        for (const [start, len, base] of ranges) {
+            if (cp >= start && cp < start + len) {
+                return String.fromCharCode(base + (cp - start));
+            }
+        }
+        return ' ';
+    });
+}
+
+function normalizeSearchText(text) {
+    return foldStyledLetters(String(text || ''))
+        .toLowerCase()
+        .normalize('NFKC')
+        .replace(/\.pdf$/gi, '')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9\s]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function matchesSearch(haystacks, rawQuery) {
+    const query = normalizeSearchText(rawQuery);
+    if (!query) return true;
+    const tokens = query.split(' ').filter(Boolean);
+    const haystack = normalizeSearchText(Array.isArray(haystacks) ? haystacks.join(' ') : haystacks);
+    return tokens.every(token => haystack.includes(token));
+}
+
+function getRecentTimestampMap() {
+    const map = {};
+    getRecentPDFs().forEach((item, index) => {
+        map[item.name] = item.timestamp || (Date.now() - index);
+    });
+    // Also consider reading progress timestamps as weak recency
+    const progress = getReadingProgress();
+    Object.keys(progress).forEach(name => {
+        const ts = progress[name]?.timestamp || 0;
+        if (!map[name] || ts > map[name]) map[name] = ts;
+    });
+    return map;
+}
+
+function sortPdfItems(items) {
+    const recentMap = getRecentTimestampMap();
+    const cloned = [...items];
+
+    if (currentSort === 'recent') {
+        cloned.sort((a, b) => {
+            const tb = recentMap[b.name] || 0;
+            const ta = recentMap[a.name] || 0;
+            if (tb !== ta) return tb - ta;
+            return normalizeSearchText(a.name).localeCompare(normalizeSearchText(b.name));
+        });
+    } else {
+        // A–Z (default) and category-size both sort titles A–Z inside a section
+        cloned.sort((a, b) =>
+            normalizeSearchText(a.name).localeCompare(normalizeSearchText(b.name))
+        );
+    }
+    return cloned;
+}
+
+function sortCategories(categoryNames) {
+    const recentMap = getRecentTimestampMap();
+    const cloned = [...categoryNames];
+
+    if (currentSort === 'size') {
+        cloned.sort((a, b) => {
+            const sizeDiff = (pdfCategories[b]?.length || 0) - (pdfCategories[a]?.length || 0);
+            if (sizeDiff !== 0) return sizeDiff;
+            return a.localeCompare(b);
+        });
+    } else if (currentSort === 'recent') {
+        cloned.sort((a, b) => {
+            const maxRecent = (cat) => {
+                const pdfs = pdfCategories[cat] || [];
+                return pdfs.reduce((best, name) => Math.max(best, recentMap[name] || 0), 0);
+            };
+            const diff = maxRecent(b) - maxRecent(a);
+            if (diff !== 0) return diff;
+            return a.localeCompare(b);
+        });
+    } else {
+        cloned.sort((a, b) => a.localeCompare(b));
+    }
+    return cloned;
+}
+
+function setSortMode(mode) {
+    const allowed = ['az', 'recent', 'size'];
+    currentSort = allowed.includes(mode) ? mode : 'az';
+    localStorage.setItem('librarySort', currentSort);
+    const select = document.getElementById('sortSelect');
+    if (select && select.value !== currentSort) select.value = currentSort;
+    renderSections();
 }
 
 // Set filter
@@ -463,6 +612,12 @@ function setFilter(category) {
     renderCategoryFilters();
     renderSections();
     closeMobileMenu();
+
+    // Keep active chip in view on mobile
+    const activeChip = document.querySelector('.category-chip.active');
+    if (activeChip) {
+        activeChip.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
 }
 
 function updateActiveFilterLabel() {
@@ -563,14 +718,14 @@ function renderSections() {
     sectionsContainer.setAttribute('data-view', currentView);
     totalPDFCount = 0;
 
-    const searchTerm = (document.getElementById('searchInput')?.value || '').toLowerCase();
+    const searchTerm = document.getElementById('searchInput')?.value || '';
     let cardIndex = 0;
 
     let categories;
     if (currentFilter === 'favorites') {
         categories = ['Favorites'];
     } else if (currentFilter === 'all') {
-        categories = Object.keys(pdfCategories);
+        categories = sortCategories(Object.keys(pdfCategories));
     } else {
         categories = [currentFilter];
     }
@@ -580,26 +735,19 @@ function renderSections() {
         let displayCategory = category;
 
         if (currentFilter === 'favorites') {
-            const bookmarks = getBookmarks();
-            filteredPDFs = bookmarks
-                .filter(item =>
-                    !searchTerm ||
-                    item.name.toLowerCase().includes(searchTerm) ||
-                    (item.category || '').toLowerCase().includes(searchTerm)
-                )
+            filteredPDFs = getBookmarks()
+                .filter(item => matchesSearch([item.name, item.category || ''], searchTerm))
                 .map(item => ({ name: item.name, category: item.category }));
             displayCategory = 'Favorites';
         } else {
             const pdfs = pdfCategories[category] || [];
             if (pdfs.length === 0) return;
-            filteredPDFs = (searchTerm
-                ? pdfs.filter(pdf =>
-                    pdf.toLowerCase().includes(searchTerm) ||
-                    category.toLowerCase().includes(searchTerm)
-                  )
-                : pdfs
-            ).map(name => ({ name, category }));
+            filteredPDFs = pdfs
+                .filter(pdf => matchesSearch([pdf, category], searchTerm))
+                .map(name => ({ name, category }));
         }
+
+        filteredPDFs = sortPdfItems(filteredPDFs);
 
         if (filteredPDFs.length === 0) return;
 
@@ -1449,6 +1597,7 @@ document.addEventListener('DOMContentLoaded', () => {
         initCache();
         initTheme();
         setViewMode(currentView);
+        setSortMode(currentSort);
         updateActiveFilterLabel();
         renderCategoryFilters();
         renderSections();
@@ -1471,6 +1620,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const viewList = document.getElementById('viewList');
         if (viewGrid) viewGrid.addEventListener('click', () => setViewMode('grid'));
         if (viewList) viewList.addEventListener('click', () => setViewMode('list'));
+
+        const sortSelect = document.getElementById('sortSelect');
+        if (sortSelect) {
+            sortSelect.value = currentSort;
+            sortSelect.addEventListener('change', (e) => setSortMode(e.target.value));
+        }
 
         const resetFiltersBtn = document.getElementById('resetFiltersBtn');
         if (resetFiltersBtn) {
