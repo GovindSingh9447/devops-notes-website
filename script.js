@@ -5,8 +5,8 @@ if (typeof pdfjsLib !== 'undefined') {
     console.warn('PDF.js library not loaded. Thumbnails will not be generated.');
 }
 
-// Organize PDFs into categories
-const pdfCategories = {
+// Seed catalog (merged/updated by GitHub sync)
+const DEFAULT_PDF_CATEGORIES = {
     "AWS & Cloud": [
         "AWS DevOps cheat.pdf",
         "AWS VPC Peering vs. Transit Gateway.pdf",
@@ -90,14 +90,309 @@ const pdfCategories = {
     ],
     "Other Resources": [
         "Deep Learning From Scratch.pdf",
-        "ML.pdf",
-        "ProtNo.pdf",
-        "applicationForm_15603179.pdf",
-        "1739243718251.pdf",
-        "Govind Singh.pdf",
-        "Govind -Singh.pdf"
+        "ML.pdf"
     ]
 };
+
+// Personal / non-library files — hidden unless Misc is enabled
+const PRIVATE_PDF_PATTERNS = [
+    /^Govind/i,
+    /applicationForm/i,
+    /^ProtNo\.pdf$/i,
+    /^\d{8,}\.pdf$/i
+];
+
+const CATEGORY_RULES = [
+    { category: 'Kubernetes', pattern: /k8s|kubernetes|ingress|kind.?cluster/i },
+    { category: 'Docker', pattern: /docker/i },
+    { category: 'CI/CD Tools', pattern: /jenkins|gitlab|github.?action|azure.?pipeline|ci-?cd|aks-ci/i },
+    { category: 'Infrastructure as Code', pattern: /terraform|ansible|iac/i },
+    { category: 'Monitoring & Observability', pattern: /prometheus|grafana|prometh|sonar|observability|monitoring/i },
+    { category: 'Git & Version Control', pattern: /\bgit\b|gitops/i },
+    { category: 'Scripting & Programming', pattern: /bash|shell|linux|python/i },
+    { category: 'AWS & Cloud', pattern: /aws|ec2|vpc|route53|cloud|elb|auto.?scaling/i },
+    { category: 'Projects & Case Studies', pattern: /project|maven|nexus|war.?deploy|case.?stud/i },
+    { category: 'DevOps Fundamentals', pattern: /devops|interview|network/i }
+];
+
+const CATALOG_CACHE_KEY = 'pdfCatalogSync';
+const CATALOG_TTL_MS = 6 * 60 * 60 * 1000;
+const SHOW_MISC_KEY = 'showMiscResources';
+
+let pdfCategories = JSON.parse(JSON.stringify(DEFAULT_PDF_CATEGORIES));
+let showMiscResources = localStorage.getItem(SHOW_MISC_KEY) === 'true';
+let pdfPathIndex = {}; // basename/display name -> repo path for nested files
+
+function isPrivatePdf(pdfName) {
+    const base = String(pdfName).split('/').pop();
+    return PRIVATE_PDF_PATTERNS.some((re) => re.test(base));
+}
+
+function categorizePdf(pdfName) {
+    const base = String(pdfName).split('/').pop();
+    for (const rule of CATEGORY_RULES) {
+        if (rule.pattern.test(base)) return rule.category;
+    }
+    return 'Other Resources';
+}
+
+function visibleCategories() {
+    return Object.keys(pdfCategories).filter((cat) => {
+        if (cat === 'Other Resources' && !showMiscResources) return false;
+        return (pdfCategories[cat] || []).length > 0;
+    });
+}
+
+function visiblePdfsInCategory(category) {
+    const list = pdfCategories[category] || [];
+    return list.filter((name) => {
+        if (isPrivatePdf(name) && !showMiscResources) return false;
+        if (category === 'Other Resources' && !showMiscResources) return false;
+        return true;
+    });
+}
+
+function mergePdfIntoCatalog(pdfPath) {
+    const base = pdfPath.split('/').pop();
+    if (!base.toLowerCase().endsWith('.pdf')) return;
+
+    pdfPathIndex[base] = pdfPath;
+
+    // Skip private unless misc shown — still keep path index for deep links if needed
+    if (isPrivatePdf(base)) {
+        if (!showMiscResources) return;
+    }
+
+    // Already present somewhere?
+    for (const list of Object.values(pdfCategories)) {
+        if (list.includes(base) || list.includes(pdfPath)) return;
+    }
+
+    const category = categorizePdf(base);
+    if (!pdfCategories[category]) pdfCategories[category] = [];
+    pdfCategories[category].push(base);
+}
+
+async function syncPdfCatalogFromGitHub() {
+    try {
+        const cached = localStorage.getItem(CATALOG_CACHE_KEY);
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed?.timestamp && Date.now() - parsed.timestamp < CATALOG_TTL_MS && parsed.categories) {
+                pdfCategories = parsed.categories;
+                pdfPathIndex = parsed.pathIndex || {};
+                return { source: 'cache', count: countCatalogPdfs() };
+            }
+        }
+    } catch (e) {
+        /* ignore bad cache */
+    }
+
+    if (typeof PDF_REPO_CONFIG === 'undefined' || !PDF_REPO_CONFIG.pdfTreeApiUrl) {
+        return { source: 'seed', count: countCatalogPdfs() };
+    }
+
+    try {
+        const response = await fetch(PDF_REPO_CONFIG.pdfTreeApiUrl, {
+            headers: { Accept: 'application/vnd.github+json' }
+        });
+        if (!response.ok) throw new Error(`GitHub API ${response.status}`);
+        const data = await response.json();
+        const files = (data.tree || [])
+            .filter((item) => item.type === 'blob' && /\.pdf$/i.test(item.path))
+            .map((item) => item.path);
+
+        pdfCategories = JSON.parse(JSON.stringify(DEFAULT_PDF_CATEGORIES));
+        pdfPathIndex = {};
+        files.forEach(mergePdfIntoCatalog);
+
+        // Strip private from public catalog when misc is off
+        if (!showMiscResources) {
+            Object.keys(pdfCategories).forEach((cat) => {
+                pdfCategories[cat] = (pdfCategories[cat] || []).filter((n) => !isPrivatePdf(n));
+            });
+            if (pdfCategories['Other Resources']) {
+                // keep learning misc, drop empties handled by visibleCategories
+            }
+        }
+
+        localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify({
+            timestamp: Date.now(),
+            categories: pdfCategories,
+            pathIndex: pdfPathIndex
+        }));
+
+        return { source: 'github', count: countCatalogPdfs() };
+    } catch (err) {
+        console.warn('PDF catalog sync failed, using seed list:', err);
+        return { source: 'seed', count: countCatalogPdfs() };
+    }
+}
+
+function countCatalogPdfs() {
+    return Object.values(pdfCategories).reduce((sum, list) => sum + list.length, 0);
+}
+
+function setShowMisc(enabled) {
+    showMiscResources = !!enabled;
+    localStorage.setItem(SHOW_MISC_KEY, showMiscResources ? 'true' : 'false');
+    // Force re-sync merge from cache/seed for private visibility
+    localStorage.removeItem(CATALOG_CACHE_KEY);
+    syncPdfCatalogFromGitHub().then(() => {
+        if (currentFilter === 'Other Resources' && !showMiscResources) {
+            currentFilter = 'all';
+            updateActiveFilterLabel();
+        }
+        renderCategoryFilters();
+        renderSections();
+    });
+}
+
+function pdfToSlug(pdfName) {
+    return normalizeSearchText(String(pdfName).split('/').pop())
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '') || 'note';
+}
+
+function findPdfBySlug(slug) {
+    const wanted = normalizeSearchText(decodeURIComponent(slug).replace(/-/g, ' '));
+    if (!wanted) return null;
+
+    let best = null;
+    let bestScore = 0;
+
+    Object.keys(pdfCategories).forEach((category) => {
+        visiblePdfsInCategory(category).forEach((name) => {
+            const cleaned = normalizeSearchText(name);
+            const slugClean = pdfToSlug(name).replace(/-/g, ' ');
+            let score = 0;
+            if (cleaned === wanted || slugClean === wanted) score = 3;
+            else if (cleaned.includes(wanted) || wanted.includes(cleaned)) score = 2;
+            else if (slugClean.includes(wanted) || wanted.includes(slugClean)) score = 1;
+            if (score > bestScore) {
+                bestScore = score;
+                best = { name, category };
+            }
+        });
+    });
+
+    return best;
+}
+
+function getShareablePdfUrl(pdfName) {
+    const slug = pdfToSlug(pdfName);
+    return `${window.location.origin}${window.location.pathname}#pdf=${encodeURIComponent(slug)}`;
+}
+
+function updatePdfHash(pdfName) {
+    const slug = pdfToSlug(pdfName);
+    const next = `#pdf=${encodeURIComponent(slug)}`;
+    if (window.history && window.history.replaceState) {
+        window.history.replaceState({ pdfView: true, pdf: pdfName }, '', next);
+    } else {
+        window.location.hash = next;
+    }
+}
+
+function clearPdfHash() {
+    if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+}
+
+function resolvePdfUrl(pdfName) {
+    const path = pdfPathIndex[pdfName] || pdfName;
+    return typeof getPDFUrl !== 'undefined' ? getPDFUrl(path) : encodeURIComponent(path);
+}
+
+function cachePdfForOffline(pdfName) {
+    if (!('serviceWorker' in navigator)) return;
+    const url = resolvePdfUrl(pdfName);
+    navigator.serviceWorker.ready.then((reg) => {
+        reg.active?.postMessage({ type: 'CACHE_PDF', url });
+    }).catch(() => {});
+}
+
+function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    if (location.protocol !== 'https:' && !isLocal) return;
+
+    navigator.serviceWorker.register('./sw.js').catch((err) => {
+        console.warn('Service worker registration failed:', err);
+    });
+}
+
+async function loadGitHubStarCount() {
+    const countEl = document.getElementById('githubStarCount');
+    if (!countEl || typeof PDF_REPO_CONFIG === 'undefined') return;
+    try {
+        const cached = sessionStorage.getItem('ghStarCount');
+        if (cached) {
+            countEl.textContent = cached;
+            return;
+        }
+        const res = await fetch(PDF_REPO_CONFIG.websiteApiUrl, {
+            headers: { Accept: 'application/vnd.github+json' }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const count = data.stargazers_count ?? 0;
+        countEl.textContent = String(count);
+        sessionStorage.setItem('ghStarCount', String(count));
+    } catch (e) {
+        /* ignore */
+    }
+}
+
+function maybePromptGitHubStar() {
+    try {
+        if (localStorage.getItem('starPromptDismissed') === 'true') return;
+        const opens = Number(localStorage.getItem('pdfOpenCount') || '0');
+        if (opens < 2) return;
+        if (sessionStorage.getItem('starPromptShown') === 'true') return;
+        const prompt = document.getElementById('starPrompt');
+        if (prompt) {
+            prompt.hidden = false;
+            sessionStorage.setItem('starPromptShown', 'true');
+        }
+    } catch (e) {
+        /* ignore */
+    }
+}
+
+function dismissStarPrompt() {
+    const prompt = document.getElementById('starPrompt');
+    if (prompt) prompt.hidden = true;
+    localStorage.setItem('starPromptDismissed', 'true');
+}
+
+async function shareCurrentPdf() {
+    if (!currentPdfName) return;
+    const url = getShareablePdfUrl(currentPdfName);
+    const title = currentPdfName.replace(/\.pdf$/i, '');
+    try {
+        if (navigator.share) {
+            await navigator.share({ title, url, text: `DevOps note: ${title}` });
+            return;
+        }
+    } catch (e) {
+        if (e?.name === 'AbortError') return;
+    }
+    try {
+        await navigator.clipboard.writeText(url);
+        const btn = document.getElementById('sharePdfBtn');
+        if (btn) {
+            const label = btn.querySelector('span');
+            const prev = label?.textContent;
+            if (label) label.textContent = 'Copied';
+            setTimeout(() => { if (label) label.textContent = prev || 'Share'; }, 1400);
+        }
+    } catch (e) {
+        window.prompt('Copy this link:', url);
+    }
+}
 
 // Cache management
 const CACHE_KEY = 'pdfLibraryCache';
@@ -319,8 +614,7 @@ async function generateThumbnail(pdfName) {
     }
 
     try {
-        // Get PDF URL from config (GitHub raw URL) or use local path
-        const pdfUrl = typeof getPDFUrl !== 'undefined' ? getPDFUrl(pdfName) : encodeURIComponent(pdfName);
+        const pdfUrl = resolvePdfUrl(pdfName);
         const loadingTask = pdfjsLib.getDocument({
             url: pdfUrl,
             cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
@@ -417,7 +711,10 @@ function renderCategoryFilters() {
     const filtersContainer = document.getElementById('categoryFilters');
     filtersContainer.innerHTML = '';
 
-    const libraryTotal = Object.values(pdfCategories).reduce((sum, list) => sum + list.length, 0);
+    const libraryTotal = visibleCategories().reduce(
+        (sum, cat) => sum + visiblePdfsInCategory(cat).length,
+        0
+    );
     const favCount = getBookmarks().length;
 
     const allBtn = document.createElement('button');
@@ -442,8 +739,8 @@ function renderCategoryFilters() {
     favBtn.onclick = () => setFilter('favorites');
     filtersContainer.appendChild(favBtn);
 
-    Object.keys(pdfCategories).forEach(category => {
-        const count = pdfCategories[category].length;
+    visibleCategories().forEach(category => {
+        const count = visiblePdfsInCategory(category).length;
         const btn = document.createElement('button');
         btn.className = `filter-btn ${currentFilter === category ? 'active' : ''}`;
         btn.setAttribute('role', 'option');
@@ -456,6 +753,14 @@ function renderCategoryFilters() {
         filtersContainer.appendChild(btn);
     });
 
+    const miscBtn = document.createElement('button');
+    miscBtn.className = `filter-btn misc-toggle ${showMiscResources ? 'active' : ''}`;
+    miscBtn.type = 'button';
+    miscBtn.innerHTML = `<span>${showMiscResources ? 'Hide misc' : 'Show misc'}</span>`;
+    miscBtn.title = 'Show or hide personal / misc files';
+    miscBtn.onclick = () => setShowMisc(!showMiscResources);
+    filtersContainer.appendChild(miscBtn);
+
     renderCategoryChips();
 }
 
@@ -463,7 +768,10 @@ function renderCategoryChips() {
     const chips = document.getElementById('categoryChips');
     if (!chips) return;
 
-    const libraryTotal = Object.values(pdfCategories).reduce((sum, list) => sum + list.length, 0);
+    const libraryTotal = visibleCategories().reduce(
+        (sum, cat) => sum + visiblePdfsInCategory(cat).length,
+        0
+    );
     const favCount = getBookmarks().length;
     chips.innerHTML = '';
 
@@ -473,15 +781,15 @@ function renderCategoryChips() {
         btn.className = `category-chip ${currentFilter === id ? 'active' : ''}`;
         btn.setAttribute('role', 'option');
         btn.setAttribute('aria-selected', currentFilter === id ? 'true' : 'false');
-        btn.innerHTML = `<span>${label}</span><span class="chip-count">${count}</span>`;
+        btn.innerHTML = `<span>${label}</span>${count !== null ? `<span class="chip-count">${count}</span>` : ''}`;
         btn.onclick = () => setFilter(id);
         chips.appendChild(btn);
     };
 
     makeChip('all', 'All', libraryTotal);
     makeChip('favorites', 'Favorites', favCount);
-    Object.keys(pdfCategories).forEach(category => {
-        makeChip(category, category, pdfCategories[category].length);
+    visibleCategories().forEach(category => {
+        makeChip(category, category, visiblePdfsInCategory(category).length);
     });
 }
 
@@ -576,14 +884,14 @@ function sortCategories(categoryNames) {
 
     if (currentSort === 'size') {
         cloned.sort((a, b) => {
-            const sizeDiff = (pdfCategories[b]?.length || 0) - (pdfCategories[a]?.length || 0);
+            const sizeDiff = visiblePdfsInCategory(b).length - visiblePdfsInCategory(a).length;
             if (sizeDiff !== 0) return sizeDiff;
             return a.localeCompare(b);
         });
     } else if (currentSort === 'recent') {
         cloned.sort((a, b) => {
             const maxRecent = (cat) => {
-                const pdfs = pdfCategories[cat] || [];
+                const pdfs = visiblePdfsInCategory(cat);
                 return pdfs.reduce((best, name) => Math.max(best, recentMap[name] || 0), 0);
             };
             const diff = maxRecent(b) - maxRecent(a);
@@ -725,7 +1033,7 @@ function renderSections() {
     if (currentFilter === 'favorites') {
         categories = ['Favorites'];
     } else if (currentFilter === 'all') {
-        categories = sortCategories(Object.keys(pdfCategories));
+        categories = sortCategories(visibleCategories());
     } else {
         categories = [currentFilter];
     }
@@ -740,7 +1048,7 @@ function renderSections() {
                 .map(item => ({ name: item.name, category: item.category }));
             displayCategory = 'Favorites';
         } else {
-            const pdfs = pdfCategories[category] || [];
+            const pdfs = visiblePdfsInCategory(category);
             if (pdfs.length === 0) return;
             filteredPDFs = pdfs
                 .filter(pdf => matchesSearch([pdf, category], searchTerm))
@@ -1020,20 +1328,18 @@ async function openPDF(pdfName, category) {
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
     
-    if (window.history && window.history.pushState) {
-        window.history.pushState({ pdfView: true }, '', '#pdf');
-    }
+    updatePdfHash(pdfName);
     
     if (pdfLoading) {
         pdfLoading.style.display = 'flex';
         pdfLoading.innerHTML = `
             <div class="spinner"></div>
-            <p>Loading PDF...</p>
+            <p>Loading PDF…</p>
         `;
     }
     if (pdfCanvas) pdfCanvas.style.display = 'none';
     
-    const pdfUrl = typeof getPDFUrl !== 'undefined' ? getPDFUrl(pdfName) : encodeURIComponent(pdfName);
+    const pdfUrl = resolvePdfUrl(pdfName);
     
     try {
         if (typeof pdfjsLib === 'undefined') {
@@ -1079,6 +1385,11 @@ async function openPDF(pdfName, category) {
         }, 120);
         
         addToRecent(pdfName, category);
+        cachePdfForOffline(pdfName);
+        try {
+            const opens = Number(localStorage.getItem('pdfOpenCount') || '0') + 1;
+            localStorage.setItem('pdfOpenCount', String(opens));
+        } catch (e) { /* ignore */ }
         
     } catch (error) {
         console.error('Error loading PDF:', error);
@@ -1110,7 +1421,7 @@ async function renderAllPages() {
     loading.id = 'pdfLoading';
     loading.innerHTML = `
         <div class="spinner"></div>
-        <p>Rendering pages…</p>
+        <p id="pdfLoadProgress">Preparing…</p>
     `;
     canvasContainer.appendChild(loading);
     
@@ -1126,6 +1437,10 @@ async function renderAllPages() {
     try {
         for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
             if (!currentPDF) break;
+            const progressEl = document.getElementById('pdfLoadProgress');
+            if (progressEl) {
+                progressEl.textContent = `Loading page ${pageNum} of ${totalPages}…`;
+            }
             const page = await currentPDF.getPage(pageNum);
             const scaledViewport = page.getViewport({ scale: scale });
             
@@ -1349,10 +1664,7 @@ function closePDF() {
     modal.classList.remove('active');
     document.body.style.overflow = 'auto';
     
-    // Remove hash from URL if present
-    if (window.history && window.history.replaceState) {
-        window.history.replaceState(null, '', window.location.pathname);
-    }
+    clearPdfHash();
     
     // Clear PDF
     if (currentPdfName && currentPage > 0) {
@@ -1382,6 +1694,7 @@ function closePDF() {
     // Refresh cards so resume hints update
     renderSections();
     renderFavorites();
+    maybePromptGitHubStar();
 }
 
 // Toggle fullscreen
@@ -1589,15 +1902,21 @@ function setupHeaderScroll() {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    const initApp = () => {
+    const initApp = async () => {
         if (typeof pdfjsLib !== 'undefined') {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         }
 
+        registerServiceWorker();
         initCache();
         initTheme();
+        await syncPdfCatalogFromGitHub();
+
         setViewMode(currentView);
-        setSortMode(currentSort);
+        const sortSelect = document.getElementById('sortSelect');
+        if (sortSelect) sortSelect.value = currentSort;
+        currentSort = ['az', 'recent', 'size'].includes(currentSort) ? currentSort : 'az';
+
         updateActiveFilterLabel();
         renderCategoryFilters();
         renderSections();
@@ -1605,32 +1924,33 @@ document.addEventListener('DOMContentLoaded', () => {
         renderFavorites();
         setupHeaderScroll();
         updateZoomLabel();
+        loadGitHubStarCount();
+
+        document.querySelectorAll('[data-github-star]').forEach((el) => {
+            if (typeof PDF_REPO_CONFIG !== 'undefined') {
+                el.href = PDF_REPO_CONFIG.websiteUrl;
+            }
+        });
+        const dismissStar = document.getElementById('dismissStarPrompt');
+        if (dismissStar) dismissStar.addEventListener('click', dismissStarPrompt);
 
         const themeToggle = document.getElementById('themeToggle');
-        if (themeToggle) {
-            themeToggle.addEventListener('click', toggleTheme);
-        }
+        if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
 
         const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-        if (mobileMenuBtn) {
-            mobileMenuBtn.addEventListener('click', toggleMobileMenu);
-        }
+        if (mobileMenuBtn) mobileMenuBtn.addEventListener('click', toggleMobileMenu);
 
         const viewGrid = document.getElementById('viewGrid');
         const viewList = document.getElementById('viewList');
         if (viewGrid) viewGrid.addEventListener('click', () => setViewMode('grid'));
         if (viewList) viewList.addEventListener('click', () => setViewMode('list'));
 
-        const sortSelect = document.getElementById('sortSelect');
         if (sortSelect) {
-            sortSelect.value = currentSort;
             sortSelect.addEventListener('change', (e) => setSortMode(e.target.value));
         }
 
         const resetFiltersBtn = document.getElementById('resetFiltersBtn');
-        if (resetFiltersBtn) {
-            resetFiltersBtn.addEventListener('click', resetFilters);
-        }
+        if (resetFiltersBtn) resetFiltersBtn.addEventListener('click', resetFilters);
 
         const zoomInBtn = document.getElementById('zoomInBtn');
         const zoomOutBtn = document.getElementById('zoomOutBtn');
@@ -1638,6 +1958,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (zoomInBtn) zoomInBtn.addEventListener('click', () => changeZoom(ZOOM_STEP));
         if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => changeZoom(-ZOOM_STEP));
         if (zoomFitBtn) zoomFitBtn.addEventListener('click', () => fitZoomWidth());
+
+        const sharePdfBtn = document.getElementById('sharePdfBtn');
+        if (sharePdfBtn) sharePdfBtn.addEventListener('click', shareCurrentPdf);
 
         const pageJumpInput = document.getElementById('pageJumpInput');
         if (pageJumpInput) {
@@ -1669,19 +1992,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const clearSearchBtn = document.getElementById('clearSearch');
-        if (clearSearchBtn) {
-            clearSearchBtn.addEventListener('click', clearSearch);
-        }
+        if (clearSearchBtn) clearSearchBtn.addEventListener('click', clearSearch);
 
         document.addEventListener('fullscreenchange', updateFullscreenIcon);
         document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
         document.addEventListener('mozfullscreenchange', updateFullscreenIcon);
         document.addEventListener('MSFullscreenChange', updateFullscreenIcon);
 
+        const openFromHash = () => {
+            const hash = window.location.hash || '';
+            const match = hash.match(/^#pdf(?:=(.+))?$/i);
+            if (!match || !match[1]) return;
+            const found = findPdfBySlug(match[1]);
+            if (found) openPDF(found.name, found.category);
+        };
+
+        window.addEventListener('hashchange', openFromHash);
         window.addEventListener('popstate', () => {
             const modal = document.getElementById('pdfModal');
+            const hash = window.location.hash || '';
+            if (/^#pdf=/i.test(hash)) {
+                openFromHash();
+                return;
+            }
             if (modal && modal.classList.contains('active')) {
-                closePDF();
+                modal.classList.remove('active');
+                document.body.style.overflow = 'auto';
             }
         });
 
@@ -1697,14 +2033,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     toggleFullscreen();
                 } else {
                     closePDF();
-                    if (window.history && window.history.replaceState) {
-                        window.history.replaceState(null, '', window.location.pathname);
-                    }
                 }
                 return;
             }
 
-            // Slash focuses search when not typing / viewing PDF
             if (!modalOpen && !typing && e.key === '/') {
                 e.preventDefault();
                 searchInput?.focus();
@@ -1713,18 +2045,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!modalOpen && e.key === 'Escape') {
                 closeMobileMenu();
-                if (document.getElementById('searchInput')?.value) {
-                    clearSearch();
-                }
+                if (document.getElementById('searchInput')?.value) clearSearch();
             }
         });
+
+        openFromHash();
     };
 
     if (typeof pdfjsLib !== 'undefined') {
         initApp();
     } else {
-        setTimeout(() => {
-            initApp();
-        }, 100);
+        setTimeout(() => initApp(), 100);
     }
 });

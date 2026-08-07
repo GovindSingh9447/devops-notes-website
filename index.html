@@ -88,6 +88,11 @@
                     </div>
 
                     <div class="header-actions">
+                        <a class="star-header-btn" data-github-star href="https://github.com/GovindSingh9447/devops-notes-website" target="_blank" rel="noopener noreferrer" title="Star this project on GitHub" aria-label="Star on GitHub">
+                            <span class="star-header-icon" aria-hidden="true">★</span>
+                            <span class="star-header-label">Star</span>
+                            <span class="star-header-count" id="githubStarCount">–</span>
+                        </a>
                         <div class="view-toggle" role="group" aria-label="View mode">
                             <button type="button" class="view-btn active" id="viewGrid" title="Grid view" aria-pressed="true">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -232,6 +237,16 @@
                         </svg>
                         <span id="bookmarkBtnText">Favorite</span>
                     </button>
+                    <button type="button" class="action-btn" id="sharePdfBtn" title="Copy shareable link">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <circle cx="18" cy="5" r="3"></circle>
+                            <circle cx="6" cy="12" r="3"></circle>
+                            <circle cx="18" cy="19" r="3"></circle>
+                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                        </svg>
+                        <span>Share</span>
+                    </button>
                     <button class="action-btn toc-btn" id="tocToggle" onclick="toggleTOC()" title="Table of contents">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="8" y1="6" x2="21" y2="6"></line>
@@ -287,6 +302,17 @@
         </div>
     </div>
 
+    <div class="star-prompt" id="starPrompt" hidden>
+        <div class="star-prompt-card">
+            <p class="star-prompt-title">Finding these notes useful?</p>
+            <p class="star-prompt-text">A GitHub star helps others discover this library — it takes one click.</p>
+            <div class="star-prompt-actions">
+                <a class="star-prompt-btn" data-github-star href="https://github.com/GovindSingh9447/devops-notes-website" target="_blank" rel="noopener noreferrer">★ Star the repo</a>
+                <button type="button" class="star-prompt-dismiss" id="dismissStarPrompt">Not now</button>
+            </div>
+        </div>
+    </div>
+
     <footer class="site-footer">
         <div class="footer-content">
             <div class="footer-wrapper">
@@ -298,6 +324,8 @@
                         </a>
                     </p>
                 </div>
+                <div class="footer-divider" aria-hidden="true"></div>
+                <a class="footer-star-link" data-github-star href="https://github.com/GovindSingh9447/devops-notes-website" target="_blank" rel="noopener noreferrer">★ Star on GitHub</a>
                 <div class="footer-divider" aria-hidden="true"></div>
                 <div class="footer-social-section">
                     <a href="https://github.com/GovindSingh9447" target="_blank" rel="noopener noreferrer" class="social-icon-link" title="GitHub" aria-label="GitHub">
