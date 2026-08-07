@@ -399,6 +399,7 @@ const CACHE_KEY = 'pdfLibraryCache';
 const RECENT_KEY = 'recentPDFs';
 const BOOKMARKS_KEY = 'pdfBookmarks';
 const PROGRESS_KEY = 'pdfReadingProgress';
+const NOTES_KEY = 'pdfPersonalNotes';
 const MAX_RECENT = 10;
 const MAX_CACHE_SIZE = 50; // Maximum number of thumbnails to cache
 const ZOOM_STEP = 0.15;
@@ -469,6 +470,7 @@ function addToRecent(pdfName, category) {
         recent = recent.slice(0, MAX_RECENT);
         localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
         renderRecentPDFs();
+        renderContinueReadingStrip();
     } catch (e) {
         console.warn('Failed to save recent PDFs:', e);
     }
@@ -599,6 +601,145 @@ function saveReadingProgress(pdfName, page) {
 function getSavedPage(pdfName) {
     const entry = getReadingProgress()[pdfName];
     return entry && entry.page > 0 ? entry.page : 1;
+}
+
+// ——— Personal notes ———
+function getAllPersonalNotes() {
+    try {
+        const raw = localStorage.getItem(NOTES_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+function getPersonalNote(pdfName) {
+    const entry = getAllPersonalNotes()[pdfName];
+    return entry && typeof entry.text === 'string' ? entry.text : '';
+}
+
+function savePersonalNote(pdfName, text) {
+    if (!pdfName) return;
+    try {
+        const data = getAllPersonalNotes();
+        const trimmed = String(text || '').trim();
+        if (!trimmed) {
+            delete data[pdfName];
+        } else {
+            data[pdfName] = {
+                text: trimmed.slice(0, 2000),
+                updatedAt: Date.now(),
+                page: currentPage || getSavedPage(pdfName)
+            };
+        }
+        localStorage.setItem(NOTES_KEY, JSON.stringify(data));
+    } catch (e) {
+        console.warn('Failed to save personal note:', e);
+    }
+}
+
+let noteSaveTimer = null;
+
+function loadNotePanelForCurrentPdf() {
+    const input = document.getElementById('personalNoteInput');
+    const status = document.getElementById('noteSaveStatus');
+    const toggle = document.getElementById('noteToggleBtn');
+    if (!input || !currentPdfName) return;
+
+    input.value = getPersonalNote(currentPdfName);
+    if (status) status.textContent = input.value.trim() ? 'Saved on this device' : 'Autosaves';
+    if (toggle) toggle.classList.toggle('has-note', !!input.value.trim());
+}
+
+function scheduleNoteSave() {
+    const input = document.getElementById('personalNoteInput');
+    const status = document.getElementById('noteSaveStatus');
+    if (!input || !currentPdfName) return;
+
+    if (status) status.textContent = 'Saving…';
+    if (noteSaveTimer) clearTimeout(noteSaveTimer);
+    noteSaveTimer = setTimeout(() => {
+        savePersonalNote(currentPdfName, input.value);
+        if (status) status.textContent = input.value.trim() ? 'Saved' : 'Autosaves';
+        const toggle = document.getElementById('noteToggleBtn');
+        if (toggle) toggle.classList.toggle('has-note', !!input.value.trim());
+        renderContinueReadingStrip();
+    }, 400);
+}
+
+function setNotePanelOpen(open) {
+    const panel = document.getElementById('notePanel');
+    const toggle = document.getElementById('noteToggleBtn');
+    if (!panel) return;
+
+    panel.hidden = !open;
+    panel.classList.toggle('open', open);
+    if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) {
+        loadNotePanelForCurrentPdf();
+        document.getElementById('personalNoteInput')?.focus();
+    }
+}
+
+function toggleNotePanel() {
+    const panel = document.getElementById('notePanel');
+    if (!panel) return;
+    setNotePanelOpen(panel.hidden);
+}
+
+// ——— Continue reading strip ———
+function getContinueReadingItem() {
+    const recent = getRecentPDFs();
+    if (!recent.length) return null;
+    return recent[0];
+}
+
+function renderContinueReadingStrip() {
+    const strip = document.getElementById('continueReadingStrip');
+    const card = document.getElementById('continueReadingCard');
+    if (!strip || !card) return;
+
+    const item = getContinueReadingItem();
+    if (!item) {
+        strip.hidden = true;
+        return;
+    }
+
+    const page = getSavedPage(item.name);
+    const note = getPersonalNote(item.name);
+    const title = item.name.replace(/\.pdf$/i, '');
+    const thumb = document.getElementById('continueThumb');
+    const titleEl = document.getElementById('continueTitle');
+    const metaEl = document.getElementById('continueMeta');
+    const noteEl = document.getElementById('continueNotePreview');
+
+    if (titleEl) titleEl.textContent = title;
+    if (metaEl) {
+        const pageLabel = page > 1 ? `Page ${page}` : 'Start from page 1';
+        metaEl.textContent = `${item.category || 'Notes'} · ${pageLabel}`;
+    }
+
+    if (noteEl) {
+        if (note) {
+            noteEl.hidden = false;
+            noteEl.textContent = note.length > 120 ? `${note.slice(0, 120)}…` : note;
+        } else {
+            noteEl.hidden = true;
+            noteEl.textContent = '';
+        }
+    }
+
+    if (thumb) {
+        const cached = thumbnailCache[item.name]?.dataUrl;
+        if (cached) {
+            thumb.innerHTML = `<img src="${cached}" alt="">`;
+        } else {
+            thumb.innerHTML = '<div class="pdf-thumbnail-placeholder" aria-hidden="true"></div>';
+        }
+    }
+
+    card.onclick = () => openPDF(item.name, item.category);
+    strip.hidden = false;
 }
 
 // Generate PDF thumbnail
@@ -1085,6 +1226,7 @@ function renderSections() {
             const itemCategory = item.category;
             const bookmarked = isBookmarked(pdfName);
             const savedPage = getSavedPage(pdfName);
+            const hasNote = !!getPersonalNote(pdfName);
 
             const pdfCard = document.createElement('article');
             pdfCard.className = 'pdf-card';
@@ -1105,6 +1247,9 @@ function renderSections() {
             const progressHint = savedPage > 1
                 ? `<div class="pdf-progress">Resume p.${savedPage}</div>`
                 : '';
+            const noteHint = hasNote
+                ? `<div class="pdf-note-badge" title="Has a personal note">Note</div>`
+                : '';
 
             pdfCard.innerHTML = `
                 <button type="button" class="card-bookmark ${bookmarked ? 'active' : ''}" aria-label="Toggle favorite" aria-pressed="${bookmarked}" title="Favorite">
@@ -1112,6 +1257,7 @@ function renderSections() {
                         <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
                     </svg>
                 </button>
+                ${noteHint}
                 <div class="pdf-thumbnail">
                     ${PLACEHOLDER_SVG}
                 </div>
@@ -1321,6 +1467,8 @@ async function openPDF(pdfName, category) {
     zoomFactor = 1;
     updateZoomLabel();
     updateViewerBookmarkBtn();
+    setNotePanelOpen(false);
+    loadNotePanelForCurrentPdf();
     
     if (pdfTitle) pdfTitle.textContent = pdfName.replace('.pdf', '');
     if (pdfCategory) pdfCategory.textContent = category;
@@ -1665,10 +1813,13 @@ function closePDF() {
     document.body.style.overflow = 'auto';
     
     clearPdfHash();
+    setNotePanelOpen(false);
     
     // Clear PDF
     if (currentPdfName && currentPage > 0) {
         saveReadingProgress(currentPdfName, currentPage);
+        const noteInput = document.getElementById('personalNoteInput');
+        if (noteInput) savePersonalNote(currentPdfName, noteInput.value);
     }
     currentPDF = null;
     currentPdfName = null;
@@ -1694,6 +1845,7 @@ function closePDF() {
     // Refresh cards so resume hints update
     renderSections();
     renderFavorites();
+    renderContinueReadingStrip();
     maybePromptGitHubStar();
 }
 
@@ -1922,6 +2074,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderSections();
         renderRecentPDFs();
         renderFavorites();
+        renderContinueReadingStrip();
         setupHeaderScroll();
         updateZoomLabel();
         loadGitHubStarCount();
@@ -1961,6 +2114,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const sharePdfBtn = document.getElementById('sharePdfBtn');
         if (sharePdfBtn) sharePdfBtn.addEventListener('click', shareCurrentPdf);
+
+        const noteToggleBtn = document.getElementById('noteToggleBtn');
+        if (noteToggleBtn) noteToggleBtn.addEventListener('click', toggleNotePanel);
+        const notePanelClose = document.getElementById('notePanelClose');
+        if (notePanelClose) notePanelClose.addEventListener('click', () => setNotePanelOpen(false));
+        const personalNoteInput = document.getElementById('personalNoteInput');
+        if (personalNoteInput) personalNoteInput.addEventListener('input', scheduleNoteSave);
+        const clearNoteBtn = document.getElementById('clearNoteBtn');
+        if (clearNoteBtn) {
+            clearNoteBtn.addEventListener('click', () => {
+                const input = document.getElementById('personalNoteInput');
+                if (!input || !currentPdfName) return;
+                input.value = '';
+                savePersonalNote(currentPdfName, '');
+                const status = document.getElementById('noteSaveStatus');
+                if (status) status.textContent = 'Cleared';
+                noteToggleBtn?.classList.remove('has-note');
+                renderContinueReadingStrip();
+            });
+        }
 
         const pageJumpInput = document.getElementById('pageJumpInput');
         if (pageJumpInput) {
@@ -2032,7 +2205,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.mozFullScreenElement || document.msFullscreenElement) {
                     toggleFullscreen();
                 } else {
-                    closePDF();
+                    const notePanel = document.getElementById('notePanel');
+                    if (notePanel && !notePanel.hidden) {
+                        setNotePanelOpen(false);
+                    } else {
+                        closePDF();
+                    }
                 }
                 return;
             }
