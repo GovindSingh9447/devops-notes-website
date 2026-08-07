@@ -1651,6 +1651,7 @@ button,
 
     .mobile-menu-btn {
         display: grid;
+        flex-shrink: 0;
     }
 
     .main-content,
@@ -1667,6 +1668,33 @@ button,
     .site-footer {
         padding-left: 1.15rem;
         padding-right: 1.15rem;
+    }
+
+    .header-top {
+        flex-wrap: wrap;
+        align-items: center;
+        row-gap: 0.75rem;
+    }
+
+    .header-copy {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    .page-title {
+        font-size: 1.35rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .header-actions {
+        flex: 1 1 100%;
+        width: 100%;
+        margin-left: 0;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 0.4rem;
     }
 
     .page-subtitle {
@@ -1698,6 +1726,23 @@ button,
     .zoom-level {
         display: none;
     }
+
+    .modal-header {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 0.65rem;
+    }
+
+    .modal-title-section {
+        flex: 1 1 calc(100% - 3rem);
+        min-width: 0;
+    }
+
+    .modal-actions {
+        width: 100%;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+    }
 }
 
 @media (max-width: 900px) {
@@ -1707,17 +1752,27 @@ button,
 }
 
 @media (max-width: 720px) {
-    .modal-header {
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-
     .page-jump.visible {
         order: 3;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .page-indicator-float {
+        bottom: 0.85rem;
+        font-size: 0.8rem;
+        padding: 0.45rem 0.85rem;
     }
 
     .page-indicator-float.visible {
         display: inline-flex;
+    }
+
+    .star-prompt {
+        left: 1rem;
+        right: 1rem;
+        bottom: 1rem;
+        max-width: none;
     }
 }
 
@@ -1727,11 +1782,8 @@ button,
     }
 
     .header-actions {
-        margin-left: auto;
-    }
-
-    .view-toggle {
-        display: none;
+        margin-left: 0;
+        justify-content: space-between;
     }
 
     .star-header-label {
@@ -1740,10 +1792,28 @@ button,
 
     .star-header-btn {
         padding: 0 0.65rem;
+        height: 40px;
+    }
+
+    .icon-btn {
+        width: 40px;
+        height: 40px;
+    }
+
+    .view-toggle {
+        display: inline-flex;
+        margin-right: auto;
     }
 
     .search-toolbar {
         max-width: none;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .search-container {
+        max-width: none;
+        width: 100%;
     }
 
     .sort-control {
@@ -1777,6 +1847,19 @@ button,
 
     .pdf-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+
+    .card-bookmark {
+        width: 28px;
+        height: 28px;
+        top: 0.35rem;
+        right: 0.35rem;
+    }
+
+    .sections-container[data-view="list"] .card-bookmark {
+        top: 50%;
+        transform: translateY(-50%);
+        right: 0.5rem;
     }
 }
 
