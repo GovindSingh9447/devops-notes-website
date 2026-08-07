@@ -1,5 +1,5 @@
 /* Service worker — app shell + recently opened PDF cache */
-const STATIC_CACHE = 'devops-notes-static-v1';
+const STATIC_CACHE = 'devops-notes-static-v2';
 const PDF_CACHE = 'devops-notes-pdfs-v1';
 const MAX_CACHED_PDFS = 12;
 
@@ -9,7 +9,11 @@ const APP_SHELL = [
     './styles.css',
     './toc-styles.css',
     './script.js',
-    './config.js'
+    './config.js',
+    './manifest.webmanifest',
+    './icons/icon-192.png',
+    './icons/icon-512.png',
+    './icons/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', (event) => {

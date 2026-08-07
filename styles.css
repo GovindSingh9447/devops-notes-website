@@ -473,6 +473,88 @@ button,
     cursor: pointer;
 }
 
+.install-prompt {
+    position: fixed;
+    left: 1.25rem;
+    right: 1.25rem;
+    bottom: 1.25rem;
+    z-index: 1210;
+    max-width: min(420px, calc(100vw - 2rem));
+    margin: 0 auto;
+}
+
+.install-prompt[hidden] {
+    display: none !important;
+}
+
+.install-prompt-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.85rem;
+    padding: 0.95rem 1.05rem;
+    border-radius: var(--radius-lg);
+    border: 1px solid color-mix(in srgb, var(--brand) 22%, var(--border));
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    backdrop-filter: blur(12px);
+    box-shadow: var(--shadow-lg);
+    animation: cardIn 0.45s var(--ease) both;
+}
+
+.install-prompt-copy {
+    min-width: 0;
+}
+
+.install-prompt-title {
+    font-family: var(--font-display);
+    font-weight: 650;
+    font-size: 0.98rem;
+    margin-bottom: 0.2rem;
+}
+
+.install-prompt-text {
+    font-size: 0.82rem;
+    color: var(--ink-muted);
+    line-height: 1.4;
+}
+
+.install-prompt-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    flex-shrink: 0;
+}
+
+.install-prompt-btn {
+    border: none;
+    border-radius: 999px;
+    padding: 0.5rem 0.95rem;
+    background: var(--brand);
+    color: #f4faf9;
+    font-family: inherit;
+    font-weight: 650;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.install-prompt-btn[hidden] {
+    display: none !important;
+}
+
+.install-prompt-dismiss {
+    border: none;
+    background: transparent;
+    color: var(--ink-faint);
+    font-family: inherit;
+    font-size: 0.78rem;
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+}
+
+.install-prompt-dismiss:hover {
+    color: var(--ink-muted);
+}
+
 .footer-star-link {
     color: var(--brand);
     font-weight: 600;
@@ -1265,6 +1347,53 @@ button,
         linear-gradient(currentColor, currentColor) 8px 18px / 12px 2px no-repeat;
 }
 
+.pdf-thumb-skeleton {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--surface-2);
+}
+
+.pdf-thumb-skeleton .skeleton-shine {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        105deg,
+        transparent 35%,
+        color-mix(in srgb, var(--surface) 70%, transparent) 50%,
+        transparent 65%
+    );
+    background-size: 200% 100%;
+    animation: skeletonShimmer 1.35s var(--ease) infinite;
+}
+
+.pdf-thumb-skeleton .skeleton-lines {
+    position: absolute;
+    left: 14%;
+    right: 14%;
+    bottom: 16%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pdf-thumb-skeleton .skeleton-lines span {
+    display: block;
+    height: 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ink-faint) 22%, var(--surface-3));
+}
+
+.pdf-thumb-skeleton .skeleton-lines span:nth-child(1) { width: 78%; }
+.pdf-thumb-skeleton .skeleton-lines span:nth-child(2) { width: 58%; }
+.pdf-thumb-skeleton .skeleton-lines span:nth-child(3) { width: 42%; }
+
+@keyframes skeletonShimmer {
+    0% { background-position: 120% 0; }
+    100% { background-position: -80% 0; }
+}
+
 .pdf-thumbnail-loading {
     position: relative;
 }
@@ -1998,6 +2127,23 @@ button,
         right: 1rem;
         bottom: 1rem;
         max-width: none;
+    }
+
+    .install-prompt {
+        left: 1rem;
+        right: 1rem;
+        bottom: 1rem;
+        max-width: none;
+    }
+
+    .install-prompt-card {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .install-prompt-actions {
+        flex-direction: row;
+        justify-content: flex-end;
     }
 }
 

@@ -4,7 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <meta name="description" content="A curated DevOps notes library — cloud, Kubernetes, CI/CD, and more.">
+    <meta name="theme-color" content="#1a6f6a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="DevOps Notes">
     <title>DevOps Notes Library</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="toc-styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -343,6 +351,19 @@
             <div class="star-prompt-actions">
                 <a class="star-prompt-btn" data-github-star href="https://github.com/GovindSingh9447/devops-notes-website" target="_blank" rel="noopener noreferrer">★ Star the repo</a>
                 <button type="button" class="star-prompt-dismiss" id="dismissStarPrompt">Not now</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="install-prompt" id="installPrompt" hidden>
+        <div class="install-prompt-card">
+            <div class="install-prompt-copy">
+                <p class="install-prompt-title" id="installPromptTitle">Install DevOps Notes</p>
+                <p class="install-prompt-text" id="installPromptText">Add to your home screen for quick access offline.</p>
+            </div>
+            <div class="install-prompt-actions">
+                <button type="button" class="install-prompt-btn" id="installAppBtn">Install</button>
+                <button type="button" class="install-prompt-dismiss" id="dismissInstallPrompt" aria-label="Dismiss">Not now</button>
             </div>
         </div>
     </div>

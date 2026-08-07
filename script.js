@@ -324,6 +324,100 @@ function registerServiceWorker() {
     });
 }
 
+// ——— PWA install ———
+const INSTALL_DISMISS_KEY = 'pwaInstallDismissedAt';
+const INSTALL_DISMISS_MS = 14 * 24 * 60 * 60 * 1000;
+let deferredInstallPrompt = null;
+
+function isStandaloneApp() {
+    return window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+}
+
+function isIosSafari() {
+    const ua = navigator.userAgent || '';
+    const iOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const webkit = /WebKit/.test(ua);
+    const chrome = /CriOS|FxiOS|EdgiOS/.test(ua);
+    return iOS && webkit && !chrome;
+}
+
+function wasInstallDismissedRecently() {
+    try {
+        const raw = localStorage.getItem(INSTALL_DISMISS_KEY);
+        if (!raw) return false;
+        return Date.now() - Number(raw) < INSTALL_DISMISS_MS;
+    } catch (e) {
+        return false;
+    }
+}
+
+function dismissInstallPrompt() {
+    const prompt = document.getElementById('installPrompt');
+    if (prompt) prompt.hidden = true;
+    try {
+        localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now()));
+    } catch (e) { /* ignore */ }
+}
+
+function showInstallPrompt(mode) {
+    if (isStandaloneApp() || wasInstallDismissedRecently()) return;
+    const prompt = document.getElementById('installPrompt');
+    const title = document.getElementById('installPromptTitle');
+    const text = document.getElementById('installPromptText');
+    const installBtn = document.getElementById('installAppBtn');
+    if (!prompt) return;
+
+    if (mode === 'ios') {
+        if (title) title.textContent = 'Add to Home Screen';
+        if (text) text.textContent = 'Tap Share, then “Add to Home Screen” for quick access.';
+        if (installBtn) installBtn.hidden = true;
+    } else {
+        if (title) title.textContent = 'Install DevOps Notes';
+        if (text) text.textContent = 'Add to your home screen for quick access offline.';
+        if (installBtn) installBtn.hidden = false;
+    }
+    prompt.hidden = false;
+}
+
+async function triggerPwaInstall() {
+    if (!deferredInstallPrompt) return;
+    const outcome = deferredInstallPrompt;
+    deferredInstallPrompt = null;
+    try {
+        await outcome.prompt();
+        await outcome.userChoice;
+    } catch (e) {
+        console.warn('Install prompt failed:', e);
+    }
+    dismissInstallPrompt();
+}
+
+function initPwaInstall() {
+    if (isStandaloneApp()) return;
+
+    const installBtn = document.getElementById('installAppBtn');
+    const dismissBtn = document.getElementById('dismissInstallPrompt');
+    if (installBtn) installBtn.addEventListener('click', triggerPwaInstall);
+    if (dismissBtn) dismissBtn.addEventListener('click', dismissInstallPrompt);
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredInstallPrompt = e;
+        showInstallPrompt('android');
+    });
+
+    window.addEventListener('appinstalled', () => {
+        deferredInstallPrompt = null;
+        dismissInstallPrompt();
+    });
+
+    // iOS has no beforeinstallprompt — show Share tip once after a short delay
+    if (isIosSafari() && !wasInstallDismissedRecently()) {
+        setTimeout(() => showInstallPrompt('ios'), 4500);
+    }
+}
+
 async function loadGitHubStarCount() {
     const countEl = document.getElementById('githubStarCount');
     if (!countEl || typeof PDF_REPO_CONFIG === 'undefined') return;
@@ -415,6 +509,15 @@ let observer = null;
 
 const PLACEHOLDER_SVG = `
     <div class="pdf-thumbnail-placeholder" aria-hidden="true"></div>
+`;
+
+const SKELETON_THUMB = `
+    <div class="pdf-thumb-skeleton" aria-hidden="true" aria-busy="true">
+        <span class="skeleton-shine"></span>
+        <span class="skeleton-lines">
+            <span></span><span></span><span></span>
+        </span>
+    </div>
 `;
 
 // Initialize cache from localStorage
@@ -800,23 +903,30 @@ async function generateThumbnail(pdfName) {
 function loadThumbnail(pdfCard, pdfName) {
     const thumbnailContainer = pdfCard.querySelector('.pdf-thumbnail');
     if (!thumbnailContainer) return;
-    
-    // Show loading indicator
-    thumbnailContainer.innerHTML = '<div class="pdf-thumbnail-loading"></div>';
-    
-    // Generate thumbnail
+
+    // Keep skeleton while generating (cards already start with one)
+    if (!thumbnailContainer.querySelector('.pdf-thumb-skeleton')) {
+        thumbnailContainer.innerHTML = SKELETON_THUMB;
+    }
+
     generateThumbnail(pdfName).then(dataUrl => {
         if (dataUrl) {
             const img = document.createElement('img');
             img.src = dataUrl;
-            img.alt = pdfName;
+            img.alt = pdfName.replace(/\.pdf$/i, '');
+            img.decoding = 'async';
             img.onload = () => {
                 thumbnailContainer.innerHTML = '';
                 thumbnailContainer.appendChild(img);
             };
+            img.onerror = () => {
+                thumbnailContainer.innerHTML = PLACEHOLDER_SVG;
+            };
         } else {
             thumbnailContainer.innerHTML = PLACEHOLDER_SVG;
         }
+    }).catch(() => {
+        thumbnailContainer.innerHTML = PLACEHOLDER_SVG;
     });
 }
 
@@ -1259,7 +1369,7 @@ function renderSections() {
                 </button>
                 ${noteHint}
                 <div class="pdf-thumbnail">
-                    ${PLACEHOLDER_SVG}
+                    ${SKELETON_THUMB}
                 </div>
                 <div class="pdf-info">
                     <div class="pdf-name">${pdfName.replace('.pdf', '')}</div>
@@ -2060,6 +2170,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         registerServiceWorker();
+        initPwaInstall();
         initCache();
         initTheme();
         await syncPdfCatalogFromGitHub();
