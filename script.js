@@ -88,6 +88,10 @@ const DEFAULT_PDF_CATEGORIES = {
         "Build_maven.pdf",
         "nexus.pdf"
     ],
+    "System Design": [
+        "System Design fundamental.pdf",
+        "System Design Interview Handbook.pdf"
+    ],
     "Other Resources": [
         "Deep Learning From Scratch.pdf",
         "ML.pdf"
@@ -103,6 +107,7 @@ const PRIVATE_PDF_PATTERNS = [
 ];
 
 const CATEGORY_RULES = [
+    { category: 'System Design', pattern: /system.?design/i },
     { category: 'Kubernetes', pattern: /k8s|kubernetes|ingress|kind.?cluster/i },
     { category: 'Docker', pattern: /docker/i },
     { category: 'CI/CD Tools', pattern: /jenkins|gitlab|github.?action|azure.?pipeline|ci-?cd|aks-ci/i },
