@@ -25,4 +25,4 @@ A private study library UI for DevOps notes (HTML/CSS/JS) with PDF viewing. Cont
 
 ## Contact
 
-For permission requests or copyright concerns: [govindsingh9447@gmail.com](mailto:govindsingh9447@gmail.com)
+For permission requests or copyright concerns: [govindkrsingh0605@gmail.com](mailto:govindkrsingh0605@gmail.com)
