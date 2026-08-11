@@ -92,6 +92,11 @@ const DEFAULT_PDF_CATEGORIES = {
         "System Design fundamental.pdf",
         "System Design Interview Handbook.pdf"
     ],
+    "Kafka & Messaging": [
+        "Kafka-Guide.pdf",
+        "Kafka-Zookeeper.pdf",
+        "The Kafka Handbook.pdf"
+    ],
     "Other Resources": [
         "Deep Learning From Scratch.pdf",
         "ML.pdf"
@@ -107,6 +112,7 @@ const PRIVATE_PDF_PATTERNS = [
 ];
 
 const CATEGORY_RULES = [
+    { category: 'Kafka & Messaging', pattern: /kafka|zookeeper|message.?queue|rabbitmq|pulsar/i },
     { category: 'System Design', pattern: /system.?design/i },
     { category: 'Kubernetes', pattern: /k8s|kubernetes|ingress|kind.?cluster/i },
     { category: 'Docker', pattern: /docker/i },
