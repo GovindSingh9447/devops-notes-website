@@ -13,6 +13,9 @@ const DEFAULT_PDF_CATEGORIES = {
         "aws_networking.pdf",
         "aws_vpc.pdf",
         "Aws-Projets.pdf",
+        "aws-notes-book.pdf",
+        "AWS-Security-EBook-DevOps-Shack-Deep-Dive-v1.pdf",
+        "EKS Cost Optimization Comprehensive Guide.pdf",
         "ec2.pdf",
         "Elastic Load Balancing & Auto Scaling Groups Section.pdf",
         "Route53.pdf",
@@ -121,7 +124,7 @@ const CATEGORY_RULES = [
     { category: 'Monitoring & Observability', pattern: /prometheus|grafana|prometh|sonar|observability|monitoring/i },
     { category: 'Git & Version Control', pattern: /\bgit\b|gitops/i },
     { category: 'Scripting & Programming', pattern: /bash|shell|linux|python/i },
-    { category: 'AWS & Cloud', pattern: /aws|ec2|vpc|route53|cloud|elb|auto.?scaling/i },
+    { category: 'AWS & Cloud', pattern: /aws|ec2|vpc|route53|cloud|elb|auto.?scaling|eks.?cost/i },
     { category: 'Projects & Case Studies', pattern: /project|maven|nexus|war.?deploy|case.?stud/i },
     { category: 'DevOps Fundamentals', pattern: /devops|interview|network/i }
 ];
